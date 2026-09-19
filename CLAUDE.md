@@ -147,7 +147,7 @@ This is a target. Files are created one at a time, following the plan.
 
 ### Environment
 1. Development machine: Mac mini, macOS, VS Code.
-2. Python work happens only inside a venv at the repo root: `python3 -m venv .venv`, then `source .venv/bin/activate`. Never install Python packages globally.
+2. Python work happens only inside a venv at the repo root. The macOS system Python is 3.9 and is too old: torch, transformers, onnxruntime and librosa all refuse it, and pip silently installs ancient versions instead of failing. Use the Homebrew Python 3.14 explicitly: `python3.14 -m venv .venv`, then `source .venv/bin/activate`. Never install Python packages globally.
 3. Node.js LTS (installed with Homebrew if missing). The app lives in `app/`, so npm commands run inside `app/`.
 
 ### GitHub Pages
@@ -253,8 +253,8 @@ Tick a box (`[x]`) as part of the commit that completes that step.
 **Phase 0: Setup**
 - [x] 1. Create the public repo with an MIT license (done by the owner)
 - [x] 2. Clone the repo on the Mac mini, open it in VS Code, add this CLAUDE.md
-- [ ] 3. Check or install tools: Homebrew, Node.js LTS, Python 3
-- [ ] 4. `.gitignore` (venv, node_modules, dist, model files, lab/data, .DS_Store)
+- [x] 3. Check or install tools: Homebrew, Node.js LTS, Python 3
+- [x] 4. `.gitignore` (venv, node_modules, dist, model files, lab/data, .DS_Store)
 - [ ] 5. Short placeholder `README.md`
 - [ ] 6. Create the venv and `lab/requirements.txt`
 - [ ] 7. Vite skeleton (plain JavaScript) in `app/`, with the correct `base` path; run it locally

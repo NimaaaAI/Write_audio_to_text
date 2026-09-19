@@ -1,0 +1,50 @@
+# macOS
+.DS_Store
+._*
+
+# Python virtual environment (rebuild with lab/requirements.txt)
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Node and Vite (rebuild with npm install / npm run build)
+node_modules/
+dist/
+.vite/
+*.local
+
+# Model lab test data: voice recordings and reference transcripts
+# stay on the owner's Mac and are never published
+lab/data/
+
+# Downloaded and converted model files. These are hundreds of megabytes
+# and are hosted on Hugging Face, not here.
+*.onnx
+*.onnx_data
+*.bin
+*.safetensors
+*.pt
+*.pth
+*.gguf
+lab/models/
+hf_cache/
+.cache/
+
+# Audio files. Test clips are private, and no audio belongs in the app bundle.
+*.wav
+*.mp3
+*.m4a
+*.ogg
+*.flac
+*.webm
+
+# Editor settings (personal, not project wide)
+.vscode/
+.idea/
+
+# Secrets
+.env
+.env.*
+!.env.example
