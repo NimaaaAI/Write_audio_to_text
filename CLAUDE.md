@@ -1,0 +1,302 @@
+# CLAUDE.md
+
+Instructions for the Claude agent working on this repository. Read this whole file before doing anything, and follow it in every session.
+
+Repository: https://github.com/NimaaaAI/Write_audio_to_text
+Owner: Nima (AI and Automation engineer, strong in Python and deep learning, newer to JavaScript and web apps)
+App display name: Voice Writer (Persian: صدانویس)
+
+---
+
+## 1. What we are building
+
+A web app that turns Persian speech into Persian text, running entirely inside the user's browser.
+
+The user either records their voice with the microphone or uploads an audio file. When they are done, the app transcribes it to Persian text, shows the text, and lets the user download it as `.txt` or `.docx`. A "copy for summary" button prepares the transcript together with a ready prompt, so the user can paste it into any chatbot to get a summary.
+
+Core principles:
+
+1. **The user's device does all the work.** There is no backend server. Speech recognition runs in the browser with transformers.js. The owner pays for nothing and hosts no compute.
+2. **Privacy.** Audio and text never leave the user's device.
+3. **Zero setup for users.** A friend opens a link, optionally taps "Add to Home Screen" or "Install", and uses it. No Python, no installs, no accounts.
+4. **Works on phones and computers.** Android Chrome, iPhone Safari, desktop Chrome, Edge and Safari.
+5. **Offline after first use.** The app shell and the model are cached, so it works in airplane mode once loaded.
+
+---
+
+## 2. How to work with the owner (most important section)
+
+The owner is building this project to **learn**. Speed matters less than understanding. Follow these rules strictly:
+
+1. **Concept before code.** Before writing any file, explain in plain words what the file does, why it is needed, and any new concept it introduces (for example: what a Web Worker is, why audio must be 16 kHz mono, what a service worker caches). Keep explanations short and concrete.
+2. **One file per turn.** Create or change exactly one file, then stop. Do not create several files at once, and do not jump ahead to the next step.
+3. **Wait for review.** After each file, stop and wait. The owner reads the file, asks questions, and approves before anything else happens.
+4. **Give the git commands, do not run them.** After each approved file, give the exact commands, in this style:
+
+   ```bash
+   git add README.md
+   git commit -m "Add README with project overview"
+   git push origin main
+   ```
+
+   Rules for git: commit straight to `main`, no branches. Use `git add` with the specific file name, never `git add .` or `git add -A`. Commit messages in English, short, describing what changed. Never run git commands yourself, never force push, never rewrite history.
+5. **Say how to test it.** After each step, tell the owner how to check that it works (a command to run, a page to open, what they should see).
+6. **Follow the plan in section 9.** Work through the steps in order. At the start of a session, look at the checklist in section 9 to see where we are, and confirm with the owner before starting the next step. If you think the plan should change, say so and explain why, but do not change direction on your own.
+7. **Be honest.** If something will not work well (a browser limitation, a model that is too weak, a memory problem on phones), say it directly. The owner prefers direct feedback over reassurance.
+8. **Ask when unsure.** If a decision is not covered in this file, ask instead of guessing.
+
+### Writing style for docs, README and comments
+
+1. English for all code, comments, docs, README and commit messages. Persian appears only in the app interface texts, the summary prompt template, and test data.
+2. **No em dashes, and no dashes joining words** in prose (write "right to left", not "right-to-left"; use commas, periods or parentheses instead). This does not apply to code, file names, package names or URLs.
+3. Plain, clear sentences. No marketing tone.
+
+---
+
+## 3. Decisions already made
+
+| Topic | Decision | Reason |
+|---|---|---|
+| Platform | Web app in the browser, installable as a PWA | Works on phones and computers with zero setup |
+| Hosting (app) | GitHub Pages, deployed by GitHub Actions | Free, HTTPS (required for microphone access) |
+| Hosting (model) | Hugging Face, copied into the owner's own HF account and pinned to a fixed commit | Keeps the GitHub repo small, avoids the 100 MB per file limit of GitHub, and protects the app if the original model repo changes. Hugging Face is reachable from Iran without a VPN. |
+| Transcription language | **Persian only.** Always force `language: "persian"` and `task: "transcribe"` | No auto detection, so no wrong guesses |
+| Interface language | Persian and English with a toggle. Default: Persian | Persian is right to left, English is left to right |
+| Input | Microphone recording and audio file upload | Upload also covers phone call recordings made with the phone's own recorder |
+| Output | User chooses `.txt` or `.docx` | PDF skipped: Persian shaping in PDF is painful |
+| Summary | v1 only: "copy for summary" button with a Persian prompt template | No LLM inside the app for now. The owner has ideas for a later v2. |
+| Model size | Not limited in advance. Chosen by measurements in the model lab | Download size is acceptable, but browser tab memory on phones is the real limit and must be tested |
+| Frontend | Vite with plain JavaScript (no React, no TypeScript) | Simple, easy to learn |
+| Git | Straight to `main`, one commit per step | Owner's choice |
+| License | MIT (already in the repo) | |
+
+---
+
+## 4. Architecture
+
+```
+User's browser (phone or computer)
+│
+├─ UI (main thread)
+│   ├─ Language toggle: Persian (RTL) / English (LTR)
+│   ├─ Record / Stop / timer / playback      (getUserMedia + MediaRecorder)
+│   ├─ Upload audio file                      (<input type="file">)
+│   ├─ Audio conversion to 16 kHz mono Float32 (Web Audio API)
+│   ├─ Transcript view
+│   ├─ Download .txt / .docx
+│   └─ Copy for summary
+│
+├─ Web Worker (background thread)
+│   └─ transformers.js ASR pipeline (Whisper, ONNX)
+│       ├─ device: WebGPU if available, else WASM
+│       ├─ dtype chosen per model part (see section 6)
+│       └─ long audio handled in chunks
+│
+└─ Service worker
+    ├─ caches the app files (offline use)
+    └─ model files cached by transformers.js in browser Cache Storage
+
+Static files: GitHub Pages   https://nimaaaai.github.io/Write_audio_to_text/
+Model files:  Hugging Face   owner's account, pinned revision
+```
+
+Why a Web Worker: transcription is heavy. Running it on the main thread would freeze the page. The worker runs it in the background and sends progress messages back to the UI.
+
+---
+
+## 5. Repository structure (target)
+
+```
+Write_audio_to_text/
+├─ CLAUDE.md                 this file
+├─ LICENSE                   MIT (exists)
+├─ README.md                 English, written in phase 9 (a short placeholder earlier)
+├─ .gitignore
+├─ .github/workflows/
+│   └─ deploy.yml            builds the app and deploys to GitHub Pages
+├─ lab/                      Python model lab (runs only on the owner's Mac)
+│   ├─ requirements.txt
+│   ├─ normalize.py          Persian text normalization
+│   ├─ model_info.py         reads model variants and sizes from the HF API
+│   ├─ benchmark.py          accuracy and speed comparison
+│   ├─ data/                 test clips and reference transcripts (git ignored)
+│   └─ results/              benchmark tables (committed)
+├─ docs/
+│   └─ model-decision.md     which model and variant, and why
+└─ app/                      the web app (Vite project)
+    ├─ index.html
+    ├─ package.json
+    ├─ vite.config.js
+    ├─ public/               icons, manifest, fonts
+    └─ src/
+        ├─ main.js           UI wiring
+        ├─ i18n.js           Persian and English interface texts
+        ├─ recorder.js       microphone recording
+        ├─ audio.js          decoding and conversion to 16 kHz mono
+        ├─ worker.js         transformers.js transcription
+        ├─ export.js         .txt and .docx downloads
+        ├─ summary.js        copy for summary
+        └─ style.css
+```
+
+This is a target. Files are created one at a time, following the plan.
+
+---
+
+## 6. Technical details and known pitfalls
+
+### Environment
+1. Development machine: Mac mini, macOS, VS Code.
+2. Python work happens only inside a venv at the repo root: `python3 -m venv .venv`, then `source .venv/bin/activate`. Never install Python packages globally.
+3. Node.js LTS (installed with Homebrew if missing). The app lives in `app/`, so npm commands run inside `app/`.
+
+### GitHub Pages
+1. The site is served under a subpath: `https://nimaaaai.github.io/Write_audio_to_text/`. In `vite.config.js`, set `base: "/Write_audio_to_text/"`, or every asset path breaks.
+2. Deploy with the official GitHub Pages actions (build `app/`, upload `app/dist`). The owner must set Settings, Pages, Source to "GitHub Actions" once. Tell him when.
+
+### Model loading (transformers.js)
+1. Package: `@huggingface/transformers` (transformers.js v3 or newer).
+2. Use the `automatic-speech-recognition` pipeline with `language: "persian"`, `task: "transcribe"`.
+3. Long audio: use the pipeline's chunking options (`chunk_length_s: 30`, with a stride/overlap) and report progress to the UI.
+4. `device`: try `"webgpu"`, fall back to `"wasm"` when WebGPU is not available.
+5. `dtype`: can be set per model part, for example `{ encoder_model: "fp32", decoder_model_merged: "q4" }`. Final values come from the model lab.
+6. Always show the model download size and a progress bar before and during the first download. On Iranian mobile data this matters.
+7. Load from the owner's HF copy with a pinned `revision`, never from a moving `main` of someone else's repo.
+
+### Model sizes (checked Sept 2026, onnx-community exports)
+| Model | Variant | Encoder | Decoder merged |
+|---|---|---|---|
+| whisper-base | int8 | 23 MB | 54 MB |
+| whisper-base | fp16 | 41 MB | 105 MB |
+| whisper-small | fp32 | 353 MB | 615 MB |
+| whisper-small | int8 | 92 MB | 157 MB |
+| whisper-small | q4 | 66 MB | 233 MB |
+
+Note: q4 is not always smaller than int8 in these exports. Always check real sizes.
+
+### Memory on phones
+Big phone storage does not mean a browser tab can use lots of RAM. Mobile browsers, especially iPhone Safari, kill tabs that use too much memory (often somewhere around 1 to 2 GB). Full precision Whisper small (about 1 GB) may crash on phones. Step 20 tests this on real devices. If it crashes, the app offers a lighter variant as "fast mode".
+
+### Audio
+1. Microphone access needs HTTPS (GitHub Pages provides it) or `localhost` during development.
+2. `MediaRecorder` output format differs by browser: webm/opus in Chrome, mp4/aac in Safari. Do not assume one format. Always decode with `AudioContext.decodeAudioData`.
+3. Whisper needs 16 kHz, mono, Float32. Convert with an `OfflineAudioContext` (resample and mix down to mono).
+4. On iPhone Safari, an `AudioContext` must be created or resumed inside a user gesture (a tap).
+5. Uploaded files: support at least mp3, m4a, wav, ogg, webm. Show a clear error if the browser cannot decode a file.
+
+### Export
+1. `.txt`: UTF-8, with a BOM so older Windows editors show Persian correctly.
+2. `.docx`: use the `docx` npm package. Paragraphs must be right to left (`bidirectional: true`, and `rightToLeft: true` on text runs). Use a Persian friendly font name (Vazirmatn, falling back to Tahoma).
+3. File names: `transcript_YYYYMMDD_HHMM.txt` / `.docx`.
+
+### Interface
+1. Persian mode: `dir="rtl"`, `lang="fa"`. English mode: `dir="ltr"`, `lang="en"`. The toggle switches both, and all interface texts live in `i18n.js`.
+2. The transcript area is always right to left, since the text is always Persian.
+3. Font: Vazirmatn (SIL Open Font License), self hosted in `public/fonts/`. Do not load fonts from Google Fonts or any CDN: it can be blocked in Iran and breaks offline use.
+4. Mobile first layout, large tap targets.
+
+### Summary v1
+1. A button copies this to the clipboard: a Persian instruction (summarize, key points, decisions, action items, in Persian) followed by the transcript.
+2. Show a short note telling the user to paste it into any chatbot they use.
+
+### Never do
+1. Never commit model files, test audio, `.venv/`, `node_modules/` or `dist/`.
+2. Never send audio or text to any server or third party API.
+3. Never add analytics or tracking.
+4. Never load scripts or fonts from CDNs in the app. Bundle everything with Vite. (The only network request besides GitHub Pages is the model download from Hugging Face.)
+5. Never run git commands for the owner.
+
+---
+
+## 7. Model lab (Python) details
+
+Goal: pick the model and variant with data, not guesses.
+
+1. **Test data**: 5 to 10 Persian clips recorded by the owner (different voices, some background noise, one long clip of about 5 minutes), plus hand typed reference transcripts, in `lab/data/` (git ignored). Optionally, a sample from the Common Voice Persian test split for a bigger check.
+2. **Normalization** (`normalize.py`), applied to both reference and prediction before scoring:
+   - Arabic ي and ى to Persian ی, Arabic ك to Persian ک
+   - Arabic and Persian digits to one consistent form
+   - remove diacritics (harakat) and tatweel (ـ)
+   - unify half spaces (ZWNJ, U+200C) and collapse extra spaces
+   - remove punctuation for scoring
+   Explain to the owner why each rule matters, since without it the error rates are misleading.
+3. **Candidates**:
+   - Whisper base and Whisper small (multilingual, onnx-community exports)
+   - The best Persian fine-tuned Whisper on Hugging Face (search models fine tuned for Persian/fa, check the license, reported WER and whether an ONNX version exists)
+   - Vosk small Persian model (runs in the browser via vosk-browser, very light)
+4. **Variants**: fp32, fp16, int8, q4 where available.
+5. **Metrics**: WER, CER (with `jiwer`), and real time factor (processing time divided by audio duration). Also file sizes (`model_info.py`, reading the HF API).
+6. **Important**: quality in the lab should be measured with the same ONNX variant the browser will load, where possible, because quantization changes accuracy.
+7. **Output**: a results table in `lab/results/`, and the decision with reasoning in `docs/model-decision.md`.
+8. **Step 14 (conversion)** happens only if the winner has no ONNX version. Then convert with `optimum`, and re-measure accuracy after conversion.
+
+Likely Python packages: `transformers`, `torch`, `onnxruntime`, `jiwer`, `soundfile`, `librosa`, `huggingface_hub`, `vosk`, and `optimum` only if step 14 is needed. Pin versions in `lab/requirements.txt`.
+
+---
+
+## 8. Definition of done for v1
+
+1. The app is live at the GitHub Pages URL.
+2. A user on Android Chrome, iPhone Safari and desktop Chrome can record or upload audio and get Persian text.
+3. `.txt` and `.docx` downloads show Persian correctly (right to left, correct letters).
+4. The interface switches between Persian and English.
+5. The app installs to the home screen and works offline after the first model download.
+6. "Copy for summary" works.
+7. The README explains usage, privacy, known limits, and credits the model and its license.
+
+---
+
+## 9. Plan and progress checklist
+
+Tick a box (`[x]`) as part of the commit that completes that step.
+
+**Phase 0: Setup**
+- [x] 1. Create the public repo with an MIT license (done by the owner)
+- [x] 2. Clone the repo on the Mac mini, open it in VS Code, add this CLAUDE.md
+- [ ] 3. Check or install tools: Homebrew, Node.js LTS, Python 3
+- [ ] 4. `.gitignore` (venv, node_modules, dist, model files, lab/data, .DS_Store)
+- [ ] 5. Short placeholder `README.md`
+- [ ] 6. Create the venv and `lab/requirements.txt`
+- [ ] 7. Vite skeleton (plain JavaScript) in `app/`, with the correct `base` path; run it locally
+- [ ] 8. GitHub Actions deploy workflow; "hello world" live on GitHub Pages and opened on the owner's phone
+
+**Phase 1: Model lab (Python)**
+- [ ] 9. Record test clips and write reference transcripts (owner does this, agent explains the format)
+- [ ] 10. `normalize.py`
+- [ ] 11. `model_info.py` (variants and sizes from the HF API)
+- [ ] 12. `benchmark.py` (WER, CER, speed across candidates and variants)
+- [ ] 13. `docs/model-decision.md`
+
+**Phase 2: Model preparation**
+- [ ] 14. Only if needed: convert the winner to ONNX and re-check accuracy
+- [ ] 15. Copy the chosen model to the owner's HF account and pin a revision
+
+**Phase 3: Audio input**
+- [ ] 16. Microphone recording: permission, record, stop, timer, playback
+- [ ] 17. File upload and conversion of any audio to 16 kHz mono
+
+**Phase 4: Transcription**
+- [ ] 18. Web Worker with transformers.js, model download progress with size shown
+- [ ] 19. Chunking for long audio, transcription progress
+- [ ] 20. Test on Mac Chrome, Android Chrome, iPhone Safari (including memory); add "fast mode" if needed
+
+**Phase 5: Export**
+- [ ] 21. `.txt` download
+- [ ] 22. `.docx` download, right to left
+
+**Phase 6: UI**
+- [ ] 23. Persian/English toggle, RTL/LTR layout, Vazirmatn font, mobile friendly design
+
+**Phase 7: PWA**
+- [ ] 24. Manifest, icons, service worker, offline test in airplane mode
+
+**Phase 8: Summary v1**
+- [ ] 25. Copy for summary button with the Persian prompt template
+
+**Phase 9: Release**
+- [ ] 26. Full English README: live link, how to install, privacy, limits, model credits and licenses
+- [ ] 27. Tag `v1.0.0` and create a GitHub Release
+
+**Later (not in v1)**
+- [ ] 28. Tab audio capture for online meetings (desktop Chrome and Edge only)
+- [ ] 29. Summary v2 (owner will describe his ideas)
