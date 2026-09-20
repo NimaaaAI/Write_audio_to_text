@@ -1,0 +1,79 @@
+# Builds the Vite app in app/ and publishes app/dist to GitHub Pages.
+#
+# Built files are never committed. They are produced here, on a fresh machine,
+# from the source in this repository. See CLAUDE.md section 6.
+#
+# One manual setup is required before this can succeed:
+#   repository Settings > Pages > Source > "GitHub Actions"
+
+name: Deploy to GitHub Pages
+
+on:
+  # Every push to main republishes the site.
+  push:
+    branches: [main]
+  # Adds a "Run workflow" button on the Actions tab, for redeploying
+  # without making a commit.
+  workflow_dispatch:
+
+# The default token can write to the repository. Narrow it to only what
+# deployment needs.
+permissions:
+  contents: read # check out the source
+  pages: write # publish to Pages
+  id-token: write # short lived credential Pages verifies
+
+# If several pushes land close together, let the running deployment finish
+# rather than cancelling it halfway. Queued runs collapse to the newest.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          # Matches the Node major version on the development Mac, so the
+          # build here cannot differ from the build there.
+          node-version: "26"
+          # Caches npm downloads between runs, keyed on the lock file.
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        # npm ci installs the exact versions in package-lock.json and fails
+        # if the lock file and package.json disagree. npm install would
+        # silently resolve newer versions instead.
+        run: npm ci
+        working-directory: app
+
+      - name: Build
+        # Writes app/dist, using the base path from vite.config.js.
+        run: npm run build
+        working-directory: app
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload the built site
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: app/dist
+
+  deploy:
+    # Waits for build to succeed. Nothing is published if the build fails.
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
