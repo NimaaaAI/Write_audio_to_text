@@ -1,0 +1,54 @@
+# Model lab dependencies. These run only on the development Mac and are never
+# shipped to users: the web app uses transformers.js in the browser instead.
+#
+# Install into the repo root venv (Python 3.14, see CLAUDE.md section 6):
+#   source .venv/bin/activate
+#   pip install -r lab/requirements.txt
+#
+# Versions are pinned so benchmark numbers stay comparable over time. An
+# unpinned reinstall months later would pull different versions and quietly
+# change the accuracy and speed results.
+
+# Runs the reference (non quantized) Whisper models, so we have a quality
+# ceiling to compare the browser variants against.
+torch==2.14.0
+transformers==5.17.0
+
+# Runs the ONNX quantized variants (int8, q4, fp16). This is the important one:
+# it is the same runtime the browser uses, so accuracy measured here reflects
+# what users will actually get.
+onnxruntime==1.30.0
+
+# Downloads models and reads file sizes from the Hugging Face API (model_info.py).
+huggingface-hub==1.32.0
+
+# Audio input. soundfile reads wav, flac, ogg and mp3. soxr resamples to the
+# 16 kHz mono that Whisper requires.
+#
+# librosa is deliberately not used. We only load and resample, and Whisper's own
+# feature extractor computes the mel spectrogram, so librosa would add numba,
+# llvmlite, scipy and scikit-learn (about 400 MB) for nothing. soxr is the same
+# resampler librosa calls internally.
+soundfile==0.14.0
+soxr==1.1.0
+
+# Word error rate and character error rate (benchmark.py).
+jiwer==4.0.0
+
+# Pinned explicitly rather than inherited from torch, so array behaviour
+# cannot shift between installs.
+numpy==2.5.3
+
+# Not installed yet, uncomment only when needed:
+#
+# optimum==2.3.0     # step 14, converting a model to ONNX ourselves
+# datasets==4.5.0    # optional Common Voice Persian sample, large download
+#
+# vosk is intentionally absent. The pip package has no macOS build at all, and
+# the browser build (vosk-browser) is a different WebAssembly compile whose
+# accuracy would not match the Python one. Vosk is evaluated with a small
+# browser test page at step 12 instead.
+#
+# ffmpeg is a system tool, not a pip package. It is needed to convert m4a and
+# aac recordings (what iPhone Voice Memos produces) to wav, because libsndfile
+# cannot decode them. Install with: brew install ffmpeg

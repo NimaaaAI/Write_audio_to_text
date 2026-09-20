@@ -223,14 +223,21 @@ Goal: pick the model and variant with data, not guesses.
 3. **Candidates**:
    - Whisper base and Whisper small (multilingual, onnx-community exports)
    - The best Persian fine-tuned Whisper on Hugging Face (search models fine tuned for Persian/fa, check the license, reported WER and whether an ONNX version exists)
-   - Vosk small Persian model (runs in the browser via vosk-browser, very light)
+   - Vosk small Persian model (runs in the browser via vosk-browser, very light).
+     Not testable in Python: the `vosk` pip package ships no macOS build, and the
+     browser WebAssembly build is a different compile whose accuracy would not match
+     the Python one anyway. Vosk is evaluated with a small browser test page at step 12.
 4. **Variants**: fp32, fp16, int8, q4 where available.
 5. **Metrics**: WER, CER (with `jiwer`), and real time factor (processing time divided by audio duration). Also file sizes (`model_info.py`, reading the HF API).
 6. **Important**: quality in the lab should be measured with the same ONNX variant the browser will load, where possible, because quantization changes accuracy.
 7. **Output**: a results table in `lab/results/`, and the decision with reasoning in `docs/model-decision.md`.
 8. **Step 14 (conversion)** happens only if the winner has no ONNX version. Then convert with `optimum`, and re-measure accuracy after conversion.
 
-Likely Python packages: `transformers`, `torch`, `onnxruntime`, `jiwer`, `soundfile`, `librosa`, `huggingface_hub`, `vosk`, and `optimum` only if step 14 is needed. Pin versions in `lab/requirements.txt`.
+Python packages are pinned in `lab/requirements.txt`: `torch`, `transformers`, `onnxruntime`, `huggingface-hub`, `soundfile`, `soxr`, `jiwer`, `numpy`. `optimum` is added only if step 14 is needed.
+
+`librosa` is deliberately not used. The lab only loads audio and resamples it to 16 kHz, and Whisper's own feature extractor computes the mel spectrogram, so librosa would pull in numba, llvmlite, scipy and scikit-learn (about 400 MB) for nothing. `soxr` is the same resampler librosa calls internally.
+
+ffmpeg is a system dependency, not a pip package. libsndfile cannot decode m4a or aac, which is what iPhone Voice Memos produces, so those clips are converted to wav with ffmpeg first (`brew install ffmpeg`).
 
 ---
 
@@ -256,7 +263,7 @@ Tick a box (`[x]`) as part of the commit that completes that step.
 - [x] 3. Check or install tools: Homebrew, Node.js LTS, Python 3
 - [x] 4. `.gitignore` (venv, node_modules, dist, model files, lab/data, .DS_Store)
 - [x] 5. Short placeholder `README.md`
-- [ ] 6. Create the venv and `lab/requirements.txt`
+- [x] 6. Create the venv and `lab/requirements.txt`
 - [ ] 7. Vite skeleton (plain JavaScript) in `app/`, with the correct `base` path; run it locally
 - [ ] 8. GitHub Actions deploy workflow; "hello world" live on GitHub Pages and opened on the owner's phone
 
