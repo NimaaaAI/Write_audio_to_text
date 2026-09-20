@@ -265,7 +265,7 @@ Tick a box (`[x]`) as part of the commit that completes that step.
 - [x] 5. Short placeholder `README.md`
 - [x] 6. Create the venv and `lab/requirements.txt`
 - [x] 7. Vite skeleton (plain JavaScript) in `app/`, with the correct `base` path; run it locally
-- [ ] 8. GitHub Actions deploy workflow; "hello world" live on GitHub Pages and opened on the owner's phone
+- [x] 8. GitHub Actions deploy workflow; "hello world" live on GitHub Pages and opened on the owner's phone
 
 **Phase 1: Model lab (Python)**
 - [ ] 9. Record test clips and write reference transcripts (owner does this, agent explains the format)
