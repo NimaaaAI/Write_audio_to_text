@@ -1,0 +1,36 @@
+<!doctype html>
+<!--
+  lang and dir start in Persian, the default interface language.
+  The language toggle in step 23 switches both of these at runtime:
+  Persian is lang="fa" dir="rtl", English is lang="en" dir="ltr".
+-->
+<html lang="fa" dir="rtl">
+  <head>
+    <!-- Must come before any text. Without it, browsers may guess the
+         encoding and render Persian as unreadable characters. -->
+    <meta charset="UTF-8" />
+
+    <!-- Makes the page use the real device width on phones instead of
+         pretending to be a 980px desktop screen and zooming out. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>صدانویس</title>
+  </head>
+
+  <body>
+    <h1>صدانویس</h1>
+    <p>تبدیل گفتار فارسی به متن، داخل مرورگر شما.</p>
+
+    <!-- main.js writes into this element. If the text below ever stays
+         on screen, JavaScript failed to load and the page is broken. -->
+    <p id="status">در حال بارگذاری…</p>
+
+    <!--
+      Vite's entry point. type="module" enables import/export syntax.
+      The path is written from the project root, and Vite rewrites it at
+      build time to the hashed bundle under the base path, for example
+      /Write_audio_to_text/assets/main-a1b2c3.js
+    -->
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
