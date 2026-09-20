@@ -65,7 +65,7 @@ The owner is building this project to **learn**. Speed matters less than underst
 | Input | Microphone recording and audio file upload | Upload also covers phone call recordings made with the phone's own recorder |
 | Output | User chooses `.txt` or `.docx` | PDF skipped: Persian shaping in PDF is painful |
 | Summary | v1 only: "copy for summary" button with a Persian prompt template | No LLM inside the app for now. The owner has ideas for a later v2. |
-| Model size | Not limited in advance. Chosen by measurements in the model lab | Download size is acceptable, but browser tab memory on phones is the real limit and must be tested |
+| Model size | **Two variants**, chosen by measurements in the model lab: a quality variant for devices with WebGPU, and a light variant for everything else. The app detects WebGPU at startup and picks one. | Measured devices disagree (see section 6). Download size is acceptable, but browser tab memory on phones is the real limit and must be tested |
 | Frontend | Vite with plain JavaScript (no React, no TypeScript) | Simple, easy to learn |
 | Git | Straight to `main`, one commit per step | Owner's choice |
 | License | MIT (already in the repo) | |
@@ -177,6 +177,23 @@ Note: q4 is not always smaller than int8 in these exports. Always check real siz
 ### Memory on phones
 Big phone storage does not mean a browser tab can use lots of RAM. Mobile browsers, especially iPhone Safari, kill tabs that use too much memory (often somewhere around 1 to 2 GB). Full precision Whisper small (about 1 GB) may crash on phones. Step 20 tests this on real devices. If it crashes, the app offers a lighter variant as "fast mode".
 
+### Measured browser capabilities (step 8, September 2026)
+Measured with the capability readout in `app/src/main.js`, on the live GitHub Pages site.
+
+| Device | Browser | WebGPU |
+|---|---|---|
+| Mac mini | Safari 26.6 | yes |
+| iPhone 15 Pro | Safari 26 | yes |
+| iPhone 8 | Safari 16 | **no** |
+
+Secure context, microphone API, MediaRecorder, Web Worker and WebAssembly passed on every device tested.
+
+iPhone 8 cannot ever gain WebGPU: Safari shipped it in version 26, and iOS 16 is the highest version that phone runs. This is not an edge case to ignore. Many users will be in Iran on older iPhones and mid range Android phones, where a tab killed by memory pressure looks like a broken app rather than a slow one.
+
+Two consequences:
+1. The WebAssembly fallback is a real code path, not a theoretical one, and must be tested.
+2. WebGPU support and available memory are separate limits. A phone can have WebGPU and still lack the headroom for full precision Whisper small. Do not treat one as a proxy for the other.
+
 ### Audio
 1. Microphone access needs HTTPS (GitHub Pages provides it) or `localhost` during development.
 2. `MediaRecorder` output format differs by browser: webm/opus in Chrome, mp4/aac in Safari. Do not assume one format. Always decode with `AudioContext.decodeAudioData`.
@@ -230,7 +247,7 @@ Goal: pick the model and variant with data, not guesses.
 4. **Variants**: fp32, fp16, int8, q4 where available.
 5. **Metrics**: WER, CER (with `jiwer`), and real time factor (processing time divided by audio duration). Also file sizes (`model_info.py`, reading the HF API).
 6. **Important**: quality in the lab should be measured with the same ONNX variant the browser will load, where possible, because quantization changes accuracy.
-7. **Output**: a results table in `lab/results/`, and the decision with reasoning in `docs/model-decision.md`.
+7. **Output**: a results table in `lab/results/`, and the decision with reasoning in `docs/model-decision.md`. The decision names **two** variants, not one: a quality variant for devices with WebGPU, and a light variant for devices without it or with little memory. See section 6.
 8. **Step 14 (conversion)** happens only if the winner has no ONNX version. Then convert with `optimum`, and re-measure accuracy after conversion.
 
 Python packages are pinned in `lab/requirements.txt`: `torch`, `transformers`, `onnxruntime`, `huggingface-hub`, `soundfile`, `soxr`, `jiwer`, `numpy`. `optimum` is added only if step 14 is needed.
