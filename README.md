@@ -1,4 +1,4 @@
-# Voice Writer (صدانویس)
+# Voice Writer 
 
 Persian speech to text that runs entirely in your browser.
 
