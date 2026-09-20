@@ -255,7 +255,7 @@ Tick a box (`[x]`) as part of the commit that completes that step.
 - [x] 2. Clone the repo on the Mac mini, open it in VS Code, add this CLAUDE.md
 - [x] 3. Check or install tools: Homebrew, Node.js LTS, Python 3
 - [x] 4. `.gitignore` (venv, node_modules, dist, model files, lab/data, .DS_Store)
-- [ ] 5. Short placeholder `README.md`
+- [x] 5. Short placeholder `README.md`
 - [ ] 6. Create the venv and `lab/requirements.txt`
 - [ ] 7. Vite skeleton (plain JavaScript) in `app/`, with the correct `base` path; run it locally
 - [ ] 8. GitHub Actions deploy workflow; "hello world" live on GitHub Pages and opened on the owner's phone
