@@ -21,10 +21,10 @@ import unicodedata
 
 # Rule 1: letters that look identical on screen but are different code points.
 LETTER_MAP = {
-    "ي": "ی",  # ي Arabic yeh         -> ی Persian yeh
-    "ى": "ی",  # ى alef maksura       -> ی Persian yeh
-    "ك": "ک",  # ك Arabic kaf         -> ک Persian kaf
-    "ۀ": "ه",  # ۀ heh with yeh above -> ه, matching rule 3, which
+    "\u064a": "\u06cc",  # ي Arabic yeh         -> ی Persian yeh
+    "\u0649": "\u06cc",  # ى alef maksura       -> ی Persian yeh
+    "\u0643": "\u06a9",  # ك Arabic kaf         -> ک Persian kaf
+    "\u06c0": "\u0647",  # ۀ heh with yeh above -> ه, matching rule 3, which
                          #   strips the separate hamza from the typed form هٔ
 }
 
@@ -35,14 +35,14 @@ DIGIT_MAP.update({chr(0x0660 + i): str(i) for i in range(10)})
 TRANSLATE = str.maketrans({**LETTER_MAP, **DIGIT_MAP})
 
 # Rule 3: diacritics and tatweel.
-# U+064B to U+065F: short vowels, tanwin, shadda, sukun, hamza above and below.
+# U+064B to U+065F: short vowels, tanwin, tashdid, sokun, hamze above and below.
 # U+0670: superscript alef. U+0640: tatweel, a stretching character.
-DIACRITICS = re.compile("[ً-ٰٟـ]")
+DIACRITICS = re.compile("[\u064b-\u065f\u0670\u0640]")
 
 # Rule 4: invisible characters. The half space (ZWNJ) becomes a normal space.
 # Other zero width characters and text direction marks are removed.
-ZWNJ = "‌"
-INVISIBLE = re.compile("[​‍‎‏‪-‮⁦-⁩﻿]")
+ZWNJ = "\u200c"
+INVISIBLE = re.compile("[\u200b\u200d\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]")
 
 WHITESPACE = re.compile(r"\s+")
 
@@ -72,28 +72,28 @@ def normalize(text: str) -> str:
 # Test inputs use \u escapes wherever the difference is invisible, so an editor
 # cannot silently "fix" them.
 _CASES = [
-    ("Arabic kaf to Persian kaf", "كتاب", "کتاب"),
-    ("Arabic yeh to Persian yeh", "علي", "علی"),
-    ("alef maksura to Persian yeh", "موسى", "موسی"),
+    ("Arabic kaf to Persian kaf", "\u0643تاب", "کتاب"),
+    ("Arabic yeh to Persian yeh", "عل\u064a", "علی"),
+    ("alef maksura to Persian yeh", "موس\u0649", "موسی"),
     ("Persian digits to ASCII", "۱۴۰۳", "1403"),
-    ("Arabic digits to ASCII", "٢٠", "20"),
-    ("short vowel marks removed", "کِتابْ", "کتاب"),
-    ("tatweel removed", "ســلام", "سلام"),
-    ("half space becomes space", "می‌روم", "می روم"),
-    ("ezafe hamza removed", "خانهٔ من", "خانه من"),
-    ("precomposed ezafe to heh", "خانۀ من", "خانه من"),
+    ("Arabic digits to ASCII", "\u0662\u0660", "20"),
+    ("short vowel marks removed", "ک\u0650تاب\u0652", "کتاب"),
+    ("tatweel removed", "س\u0640\u0640لام", "سلام"),
+    ("half space becomes space", "می\u200cروم", "می روم"),
+    ("ezafe hamza removed", "خانه\u0654 من", "خانه من"),
+    ("precomposed ezafe to heh", "خان\u06c0 من", "خانه من"),
     ("Persian punctuation removed", "سلام، خوبی؟", "سلام خوبی"),
     ("guillemets removed", "«سلام»", "سلام"),
     ("punctuation without space splits words", "سلام،خوبی", "سلام خوبی"),
     ("alef madda survives, composed", "آب", "آب"),
-    ("alef madda survives, decomposed", "آب", "آب"),
-    ("presentation forms folded", "ﺳﻼﻡ", "سلام"),
-    ("direction marks removed", "‏سلام‎", "سلام"),
+    ("alef madda survives, decomposed", "ا\u0653ب", "آب"),
+    ("presentation forms folded", "\ufeb3\ufefc\ufee1", "سلام"),
+    ("direction marks removed", "\u200fسلام\u200e", "سلام"),
     ("extra spaces collapsed", "  سلام   دنیا \n", "سلام دنیا"),
     ("Latin text lowercased", "Hello دنیا", "hello دنیا"),
 ]
 
-
+# Checker
 def _self_test() -> bool:
     failures = 0
     for description, raw, expected in _CASES:

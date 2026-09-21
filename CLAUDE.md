@@ -173,6 +173,7 @@ This is a target. Files are created one at a time, following the plan.
 | whisper-small | q4 | 66 MB | 233 MB |
 
 Note: q4 is not always smaller than int8 in these exports. Always check real sizes.
+The reason: q4 quantizes only matrix multiplications and leaves the decoder's token embedding table (106 MB in base, fp32) untouched, while int8 quantizes it too.
 
 ### Memory on phones
 Big phone storage does not mean a browser tab can use lots of RAM. Mobile browsers, especially iPhone Safari, kill tabs that use too much memory (often somewhere around 1 to 2 GB). Full precision Whisper small (about 1 GB) may crash on phones. Step 20 tests this on real devices. If it crashes, the app offers a lighter variant as "fast mode".
