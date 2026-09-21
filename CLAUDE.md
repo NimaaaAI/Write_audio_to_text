@@ -230,6 +230,9 @@ Two consequences:
 Goal: pick the model and variant with data, not guesses.
 
 1. **Test data**: 5 to 10 Persian clips recorded by the owner (different voices, some background noise, one long clip of about 5 minutes), plus hand typed reference transcripts, in `lab/data/` (git ignored). Optionally, a sample from the Common Voice Persian test split for a bigger check.
+   Actual set (step 9): two owner recordings (`mic1`, `mic2`) and four podcast episodes (`pod1` to `pod4`, 9 to 15 minutes, some with background music), mapped to their original files in `lab/data/sources.txt`.
+   Podcast accuracy is scored on a fixed excerpt, **03:00 to 05:30** of each episode, so nobody has to pick times or type ten minute transcripts. Full episodes are used for speed only.
+   Conversion is automatic: `benchmark.py` decodes the originals in `raw/` through ffmpeg in memory and cuts the excerpts itself. No manual ffmpeg step. Update `lab/README.md` to match when step 12 is built.
 2. **Normalization** (`normalize.py`), applied to both reference and prediction before scoring:
    - Arabic ي and ى to Persian ی, Arabic ك to Persian ک
    - Arabic and Persian digits to one consistent form
@@ -237,6 +240,8 @@ Goal: pick the model and variant with data, not guesses.
    - unify half spaces (ZWNJ, U+200C) and collapse extra spaces
    - remove punctuation for scoring
    Explain to the owner why each rule matters, since without it the error rates are misleading.
+   NFKC runs first, so presentation forms are folded and آ stays composed (otherwise the diacritic rule strips its madda).
+   Limitation: `میروم` versus `می روم` is not fixable without a word segmenter, which is why CER is reported next to WER.
 3. **Candidates**:
    - Whisper base and Whisper small (multilingual, onnx-community exports)
    - The best Persian fine-tuned Whisper on Hugging Face (search models fine tuned for Persian/fa, check the license, reported WER and whether an ONNX version exists)
@@ -286,7 +291,7 @@ Tick a box (`[x]`) as part of the commit that completes that step.
 
 **Phase 1: Model lab (Python)**
 - [ ] 9. Record test clips and write reference transcripts (owner does this, agent explains the format)
-- [ ] 10. `normalize.py`
+- [x] 10. `normalize.py`
 - [ ] 11. `model_info.py` (variants and sizes from the HF API)
 - [ ] 12. `benchmark.py` (WER, CER, speed across candidates and variants)
 - [ ] 13. `docs/model-decision.md`
