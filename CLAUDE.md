@@ -246,6 +246,12 @@ Goal: pick the model and variant with data, not guesses.
 3. **Candidates**:
    - Whisper base and Whisper small (multilingual, onnx-community exports)
    - The best Persian fine-tuned Whisper on Hugging Face (search models fine tuned for Persian/fa, check the license, reported WER and whether an ONNX version exists)
+     Searched in step 11 (September 2026). Findings:
+     - None of the Persian fine tunes has an ONNX version, so any winner needs step 14.
+     - The best reported WERs (8.7, 14.1) are fine tunes of large-v3 and large-v3-turbo, 3 to 6 GB. Too large for the browser.
+     - Realistic candidates, all Apache 2.0: `AmirMohseni/whisper-small-persian` (small, reports 25.8 on FLEURS), `steja/whisper-small-persian` (small, reports 32.9 on Common Voice 11), `C1Tech/whisper_base_persian` and `Paulwalker4884/whisper-persian` (base, no WER reported).
+     - Excluded: `hezarai/whisper-small-fa` (no license declared, and in the hezar library's own format), `AmirMohseni/whisper-large-v3-persian-ct2-int8` (CTranslate2 format, not usable in a browser).
+     - Reported WERs use each author's own test set and are not comparable. Test the fine tunes in PyTorch as they are, and convert only the winner.
    - Vosk small Persian model (runs in the browser via vosk-browser, very light).
      Not testable in Python: the `vosk` pip package ships no macOS build, and the
      browser WebAssembly build is a different compile whose accuracy would not match
@@ -293,7 +299,7 @@ Tick a box (`[x]`) as part of the commit that completes that step.
 **Phase 1: Model lab (Python)**
 - [ ] 9. Record test clips and write reference transcripts (owner does this, agent explains the format)
 - [x] 10. `normalize.py`
-- [ ] 11. `model_info.py` (variants and sizes from the HF API)
+- [x] 11. `model_info.py` (variants and sizes from the HF API)
 - [ ] 12. `benchmark.py` (WER, CER, speed across candidates and variants)
 - [ ] 13. `docs/model-decision.md`
 
