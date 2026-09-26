@@ -59,13 +59,13 @@ The owner is building this project to **learn**. Speed matters less than underst
 |---|---|---|
 | Platform | Web app in the browser, installable as a PWA | Works on phones and computers with zero setup |
 | Hosting (app) | GitHub Pages, deployed by GitHub Actions | Free, HTTPS (required for microphone access) |
-| Hosting (model) | Hugging Face, copied into the owner's own HF account and pinned to a fixed commit | Keeps the GitHub repo small, avoids the 100 MB per file limit of GitHub, and protects the app if the original model repo changes. Hugging Face is reachable from Iran without a VPN. |
+| Hosting (model) | Loaded straight from the `onnx-community` repositories on Hugging Face, each with a pinned `revision`. No copy in the owner's account. | Keeps the GitHub repo small and avoids the 100 MB per file limit. Pinning a commit protects the app from re-exports and changes to their `main`. Copying five models would mean uploading 3 to 4 GB from Iran for very little gain, and `onnx-community` is Hugging Face's own organisation. Hugging Face is reachable from Iran without a VPN. |
 | Transcription language | **Persian only.** Always force `language: "persian"` and `task: "transcribe"` | No auto detection, so no wrong guesses |
 | Interface language | Persian and English with a toggle. Default: Persian | Persian is right to left, English is left to right |
 | Input | Microphone recording and audio file upload | Upload also covers phone call recordings made with the phone's own recorder |
 | Output | User chooses `.txt` or `.docx` | PDF skipped: Persian shaping in PDF is painful |
 | Summary | v1 only: "copy for summary" button with a Persian prompt template | No LLM inside the app for now. The owner has ideas for a later v2. |
-| Model size | **Two variants**, chosen by measurements in the model lab: a quality variant for devices with WebGPU, and a light variant for everything else. The app detects WebGPU at startup and picks one. | Measured devices disagree (see section 6). Download size is acceptable, but browser tab memory on phones is the real limit and must be tested |
+| Model size | **Five models in the interface**, the smallest one recommended and used by default. The other four are stronger and larger, chosen by the user. See the decision table in section 6. | Measured in the lab. Everything smaller than the recommended model was unusable in Persian, so there is no light variant. Browser tab memory on phones is still the real limit and must be tested in step 20 |
 | Frontend | Vite with plain JavaScript (no React, no TypeScript) | Simple, easy to learn |
 | Git | Straight to `main`, one commit per step | Owner's choice |
 | License | MIT (already in the repo) | |
@@ -97,7 +97,7 @@ User's browser (phone or computer)
     └─ model files cached by transformers.js in browser Cache Storage
 
 Static files: GitHub Pages   https://nimaaaai.github.io/Write_audio_to_text/
-Model files:  Hugging Face   owner's account, pinned revision
+Model files:  Hugging Face   onnx-community repositories, pinned revisions
 ```
 
 Why a Web Worker: transcription is heavy. Running it on the main thread would freeze the page. The worker runs it in the background and sends progress messages back to the UI.
@@ -114,15 +114,17 @@ Write_audio_to_text/
 ├─ .gitignore
 ├─ .github/workflows/
 │   └─ deploy.yml            builds the app and deploys to GitHub Pages
-├─ lab/                      Python model lab (runs only on the owner's Mac)
+├─ lab/                      model lab (runs only on the owner's Mac)
+│   ├─ README.md             test data layout and conversion commands
 │   ├─ requirements.txt
-│   ├─ normalize.py          Persian text normalization
+│   ├─ normalize.py          Persian text normalization (unused while there are no references)
 │   ├─ model_info.py         reads model variants and sizes from the HF API
-│   ├─ benchmark.py          accuracy and speed comparison
-│   ├─ data/                 test clips and reference transcripts (git ignored)
-│   └─ results/              benchmark tables (committed)
-├─ docs/
-│   └─ model-decision.md     which model and variant, and why
+│   ├─ benchmark.py          full precision PyTorch transcription
+│   ├─ node/                 quantized ONNX transcription with transformers.js
+│   │   ├─ package.json
+│   │   └─ onnx_test.js      the same runtime the browser uses
+│   ├─ data/                 clips, transcripts, model cache (all git ignored)
+│   └─ results/              generated tables (committed)
 └─ app/                      the web app (Vite project)
     ├─ index.html
     ├─ package.json
@@ -161,7 +163,7 @@ This is a target. Files are created one at a time, following the plan.
 4. `device`: try `"webgpu"`, fall back to `"wasm"` when WebGPU is not available.
 5. `dtype`: can be set per model part, for example `{ encoder_model: "fp32", decoder_model_merged: "q4" }`. Final values come from the model lab.
 6. Always show the model download size and a progress bar before and during the first download. On Iranian mobile data this matters.
-7. Load from the owner's HF copy with a pinned `revision`, never from a moving `main` of someone else's repo.
+7. Load from the `onnx-community` repositories with a pinned `revision` (see the table in this section), never from a moving `main`.
 
 ### Model sizes (checked Sept 2026, onnx-community exports)
 | Model | Variant | Encoder | Decoder merged |
@@ -174,6 +176,43 @@ This is a target. Files are created one at a time, following the plan.
 
 Note: q4 is not always smaller than int8 in these exports. Always check real sizes.
 The reason: q4 quantizes only matrix multiplications and leaves the decoder's token embedding table (106 MB in base, fp32) untouched, while int8 quantizes it too.
+
+### Model decision (step 13, September 2026)
+
+Measured in the lab on a 150 second excerpt of an Iranian podcast (`pod1_ex`) and on the owner's own recordings. The five models offered in the interface, all loaded straight from `onnx-community` with a pinned revision:
+
+| # | Repository | dtype | Download | Revision | Tested |
+|---|---|---|---|---|---|
+| **1** | `onnx-community/whisper-large-v3-turbo` | **q4f16** | **563 MB** | `360ebcde2559d60bb474678be3c1de9ef347d01a` | yes, **default and recommended** |
+| 2 | `onnx-community/whisper-large-fa-v1-ONNX` (Persian fine tune) | q4f16 | 601 MB | `7086057933227d590821e4690bb41cb9d9c417a4` | no |
+| 3 | `onnx-community/whisper-large-v3-turbo` | q4 | 759 MB | as row 1 | no |
+| 4 | `onnx-community/whisper-large-v3-ONNX` | q4f16 | 980 MB | `3b6257ad5e67aa523c7c07f4fea04d445eecc4a6` | no |
+| 5 | `onnx-community/whisper-large-v3-turbo` | q8 | 1085 MB | as row 1 | yes, 95 percent identical to row 1 |
+
+Rows 3 and 5 need no extra repository, only a different `dtype`.
+
+What the measurements showed:
+
+1. **Multilingual `base` and `small` are unusable for Persian.** `base` produced syllable soup and runaway loops. `small` produced real words with about a third wrong. This killed the plan for a light variant for old phones.
+2. **Persian fine tunes of small are also unusable.** `aictsharif/whisper-small-fa` at q8 lost 52 seconds of a 150 second clip to a repetition loop, and its timestamps drifted.
+3. **Quantization is cheap, model choice is not.** turbo q8 (1085 MB) and turbo q4f16 (563 MB) agreed 95 percent, differing in two `ذ` versus `ز` errors and one burst of Latin characters. Halving the download again is worth far more than those three errors.
+4. **`large-v3` is better but impractical.** In PyTorch it was the only run with no loops (4 percent repeated phrases against 26 to 34 percent for others), but it is 980 MB at q4f16 and has 32 decoder layers against turbo's 4, so roughly four times slower. Offered as an option, not as the default.
+5. **Sequential long form beats chunking on quality but does not exist in transformers.js.** The Python library walks through audio using predicted timestamps; the JavaScript library only cuts fixed 30 second chunks. So the browser always uses chunking, and lab numbers from sequential mode are optimistic.
+6. **The temperature fallback cannot be used in the Python lab.** `transformers==5.17.0` crashes when Whisper samples: `generation/utils.py:476 for layer in self.cache.layers`, `AttributeError: 'EncoderDecoderCache' object has no attribute 'layers'`. Keep `temperature` a single `0.0`. This does not affect the browser.
+
+### Recording quality dominates model choice
+The single most important finding of Phase 1. The same model, same settings, same script:
+
+| Audio | Energy above 2 kHz | Result |
+|---|---|---|
+| Studio podcast | 3.5 percent | clean, readable Persian |
+| Owner's muffled phone clip | 1.2 percent | nonsense: `چه به خونم جبونم رفت` |
+
+`ک`, `چ` and `ط` are distinguished from `گ`, `ج` and `د` almost entirely by a burst of energy between 2 and 8 kHz. A recording made from too far away, through clothing, or over a Bluetooth voice link loses that band, and no model can recover it. Every model tested failed in the same way on the same clips.
+
+Consequences for the app:
+1. The interface should tell users to record close to the microphone, in a quiet room, and to prefer the phone's own microphone over Bluetooth earbuds.
+2. Poor transcripts are often the recording, not the model. Say so in the README, so users do not conclude the app is broken.
 
 ### Memory on phones
 Big phone storage does not mean a browser tab can use lots of RAM. Mobile browsers, especially iPhone Safari, kill tabs that use too much memory (often somewhere around 1 to 2 GB). Full precision Whisper small (about 1 GB) may crash on phones. Step 20 tests this on real devices. If it crashes, the app offers a lighter variant as "fast mode".
@@ -212,6 +251,8 @@ Two consequences:
 2. The transcript area is always right to left, since the text is always Persian.
 3. Font: Vazirmatn (SIL Open Font License), self hosted in `public/fonts/`. Do not load fonts from Google Fonts or any CDN: it can be blocked in Iran and breaks offline use.
 4. Mobile first layout, large tap targets.
+5. A model picker listing the five models from section 6 with their download sizes, the recommended one selected by default.
+6. A short recording hint, since recording quality matters more than model choice: record close to the microphone, in a quiet room, and prefer the phone's own microphone over Bluetooth earbuds.
 
 ### Summary v1
 1. A button copies this to the clipboard: a Persian instruction (summarize, key points, decisions, action items, in Persian) followed by the transcript.
@@ -232,7 +273,9 @@ Goal: pick the model and variant with data, not guesses.
 
 1. **Test data**: 5 to 10 Persian clips recorded by the owner (different voices, some background noise, one long clip of about 5 minutes), plus hand typed reference transcripts, in `lab/data/` (git ignored). Optionally, a sample from the Common Voice Persian test split for a bigger check.
    Actual set (step 9): two owner recordings (`mic1`, `mic2`) and four podcast episodes (`pod1` to `pod4`, 9 to 15 minutes, some with background music), mapped to their original files in `lab/data/sources.txt`.
-   Podcast accuracy is scored on a fixed excerpt, **03:00 to 05:30** of each episode, so nobody has to pick times or type ten minute transcripts. Full episodes are used for speed only.
+   Podcast accuracy is reviewed on a fixed excerpt, **03:00 to 05:30** of each episode, so nobody has to pick times or review ten minute transcripts. Full episodes are used for speed only.
+   **Evaluation method (owner's decision, step 12):** no reference transcripts are typed. The owner, a native Persian speaker, judges accuracy by listening to each clip while reading the candidate transcripts side by side. WER and CER are therefore not computed, and the step 13 decision rests on this review plus measured speed and size.
+   The owner also records targeted mic clips (`mic3` and on) that say hard cases on purpose: numbers, dates, times, English words, names, fast speech. Podcasts rarely contain these, and they are where models fail.
    Conversion is automatic: `benchmark.py` decodes the originals in `raw/` through ffmpeg in memory and cuts the excerpts itself. No manual ffmpeg step. Update `lab/README.md` to match when step 12 is built.
 2. **Normalization** (`normalize.py`), applied to both reference and prediction before scoring:
    - Arabic ي and ى to Persian ی, Arabic ك to Persian ک
@@ -241,6 +284,7 @@ Goal: pick the model and variant with data, not guesses.
    - unify half spaces (ZWNJ, U+200C) and collapse extra spaces
    - remove punctuation for scoring
    Explain to the owner why each rule matters, since without it the error rates are misleading.
+   Not used for scoring while there are no reference transcripts (see point 1). Kept for when references are added.
    NFKC runs first, so presentation forms are folded and آ stays composed (otherwise the diacritic rule strips its madda).
    Limitation: `میروم` versus `می روم` is not fixable without a word segmenter, which is why CER is reported next to WER.
 3. **Candidates**:
@@ -257,7 +301,7 @@ Goal: pick the model and variant with data, not guesses.
      browser WebAssembly build is a different compile whose accuracy would not match
      the Python one anyway. Vosk is evaluated with a small browser test page at step 12.
 4. **Variants**: fp32, fp16, int8, q4 where available.
-5. **Metrics**: WER, CER (with `jiwer`), and real time factor (processing time divided by audio duration). Also file sizes (`model_info.py`, reading the HF API).
+5. **Metrics**: real time factor (processing time divided by audio duration) and file sizes (`model_info.py`). Accuracy is judged by the owner's side by side review instead of WER and CER (see point 1).
 6. **Important**: quality in the lab should be measured with the same ONNX variant the browser will load, where possible, because quantization changes accuracy.
 7. **Output**: a results table in `lab/results/`, and the decision with reasoning in `docs/model-decision.md`. The decision names **two** variants, not one: a quality variant for devices with WebGPU, and a light variant for devices without it or with little memory. See section 6.
 8. **Step 14 (conversion)** happens only if the winner has no ONNX version. Then convert with `optimum`, and re-measure accuracy after conversion.
@@ -297,15 +341,15 @@ Tick a box (`[x]`) as part of the commit that completes that step.
 - [x] 8. GitHub Actions deploy workflow; "hello world" live on GitHub Pages and opened on the owner's phone
 
 **Phase 1: Model lab (Python)**
-- [ ] 9. Record test clips and write reference transcripts (owner does this, agent explains the format)
+- [x] 9. Record test clips and write reference transcripts (owner does this, agent explains the format). References dropped by the owner's decision, see section 7
 - [x] 10. `normalize.py`
 - [x] 11. `model_info.py` (variants and sizes from the HF API)
-- [ ] 12. `benchmark.py` (WER, CER, speed across candidates and variants)
-- [ ] 13. `docs/model-decision.md`
+- [x] 12. `benchmark.py` (full precision PyTorch) and `lab/node/onnx_test.js` (quantized ONNX, the exact browser runtime)
+- [x] 13. Model decision. Recorded in section 6 of this file ("Model decision" and "Recording quality dominates model choice") instead of a separate `docs/model-decision.md`
 
 **Phase 2: Model preparation**
-- [ ] 14. Only if needed: convert the winner to ONNX and re-check accuracy
-- [ ] 15. Copy the chosen model to the owner's HF account and pin a revision
+- [x] 14. Not needed: `onnx-community` already publishes ONNX exports of every chosen model
+- [x] 15. Not needed by the owner's decision: the app loads from `onnx-community` directly with pinned revisions (see section 3)
 
 **Phase 3: Audio input**
 - [ ] 16. Microphone recording: permission, record, stop, timer, playback
@@ -321,7 +365,7 @@ Tick a box (`[x]`) as part of the commit that completes that step.
 - [ ] 22. `.docx` download, right to left
 
 **Phase 6: UI**
-- [ ] 23. Persian/English toggle, RTL/LTR layout, Vazirmatn font, mobile friendly design
+- [ ] 23. Persian/English toggle, RTL/LTR layout, Vazirmatn font, mobile friendly design, model picker with the five models and their download sizes
 
 **Phase 7: PWA**
 - [ ] 24. Manifest, icons, service worker, offline test in airplane mode
