@@ -90,11 +90,35 @@ export async function dumpFile() {
   return database.dumpDataDir("gzip");
 }
 
-export async function restoreFile(file) {
+// PGlite refuses to load a backup when a database already exists in that
+// location, even an empty one ("Database already exists, cannot load from
+// tarball"). So the existing data has to be deleted first.
+async function deleteStoredDatabase() {
   if (db) {
     await db.close();
     db = null;
   }
+  // PGlite stores its files in IndexedDB. Rather than hardcode the internal
+  // name, find every database whose name mentions ours and remove it.
+  const names = (await indexedDB.databases?.())?.map((entry) => entry.name) ?? [];
+  const candidates = names.filter((name) => name?.includes("voice-writer"));
+  // Firefox does not support indexedDB.databases(), so fall back to the names
+  // PGlite is known to use.
+  if (candidates.length === 0) candidates.push("/pglite/voice-writer", "voice-writer");
+
+  await Promise.all(
+    candidates.map(
+      (name) =>
+        new Promise((resolve) => {
+          const request = indexedDB.deleteDatabase(name);
+          request.onsuccess = request.onerror = request.onblocked = () => resolve();
+        }),
+    ),
+  );
+}
+
+export async function restoreFile(file) {
+  await deleteStoredDatabase();
   db = await PGlite.create({ loadDataDir: file, dataDir: DATA_DIR });
   await db.exec(SCHEMA);
   return db;
