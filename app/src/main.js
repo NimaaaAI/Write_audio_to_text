@@ -272,6 +272,20 @@ async function refreshRecords() {
   for (const row of rows) {
     const tr = document.createElement("tr");
 
+    // The id is a uuid, which is 36 characters and would dominate the table on a
+    // phone. Show the first 8, keep the whole thing in the tooltip, and copy the
+    // full value on click, since that is what an id is actually needed for.
+    const identifier = document.createElement("td");
+    const idButton = document.createElement("button");
+    idButton.textContent = row.id.slice(0, 8);
+    idButton.title = `${row.id}\nبرای کپی کلیک کنید`;
+    idButton.style.cssText = "font-family: monospace; padding: 0.2rem; width: auto;";
+    idButton.addEventListener("click", async () => {
+      await navigator.clipboard?.writeText(row.id);
+      dbStatus.textContent = `شناسه کپی شد: ${row.id}`;
+    });
+    identifier.append(idButton);
+
     const date = document.createElement("td");
     date.textContent = new Date(row.created_at).toLocaleDateString("fa-IR");
 
@@ -297,7 +311,7 @@ async function refreshRecords() {
     });
     actions.append(remove);
 
-    tr.append(date, person, text, actions);
+    tr.append(identifier, date, person, text, actions);
     recordsBody.append(tr);
   }
 }
