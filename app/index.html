@@ -101,6 +101,44 @@
       </table>
     </fieldset>
 
+    <!-- ---------------------------------------------------------------- chat -->
+    <fieldset>
+      <legend>پرسش از رکوردها</legend>
+
+      <p class="hint">
+        برای این بخش به کلید API خودتان نیاز دارید. کلید فقط در همین مرورگر ذخیره
+        می‌شود و جایی نمی‌رود جز سرویسی که خودتان انتخاب کرده‌اید. صدا هرگز فرستاده
+        نمی‌شود، فقط متن رکوردها. هزینه‌ی مصرف با حساب خودتان است.
+      </p>
+
+      <label for="chat-base">آدرس سرویس</label>
+      <input id="chat-base" type="text" placeholder="https://api.gapgpt.app/v1" />
+
+      <label for="chat-model">نام مدل</label>
+      <input id="chat-model" type="text" placeholder="gpt-4o-mini" />
+
+      <label for="chat-key">کلید API</label>
+      <input id="chat-key" type="password" placeholder="sk-..." autocomplete="off" />
+
+      <div class="row">
+        <button id="chat-save">ذخیره تنظیمات</button>
+        <button id="chat-forget" class="danger">پاک کردن کلید</button>
+      </div>
+
+      <label for="chat-question">پرسش</label>
+      <textarea id="chat-question" dir="rtl" style="min-height: 4rem"
+        placeholder="مثلاً: آقای مورگان چقدر بدهکار است؟"></textarea>
+      <button id="chat-ask">بپرس</button>
+
+      <p id="chat-status" class="hint"></p>
+      <textarea id="chat-answer" dir="rtl" readonly placeholder="پاسخ اینجا نمایش داده می‌شود"></textarea>
+
+      <details>
+        <summary class="hint">متنی که برای سرویس فرستاده شد</summary>
+        <textarea id="chat-context" dir="rtl" readonly style="min-height: 6rem"></textarea>
+      </details>
+    </fieldset>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

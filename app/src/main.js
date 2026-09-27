@@ -1,6 +1,7 @@
 // Interface wiring: record or upload audio, convert it, hand it to the worker,
 // show progress, save the result in the database, export things.
 
+import * as chat from "./chat.js";
 import * as db from "./db.js";
 import { MODELS, DEFAULT_MODEL } from "./models.js";
 
@@ -344,6 +345,59 @@ el("restore").addEventListener("change", async () => {
     await refreshRecords();
   } catch (error) {
     dbStatus.textContent = `بازگرداندن انجام نشد: ${error.message}`;
+  }
+});
+
+// ----------------------------------------------------------------------- chat --
+const chatFields = { baseUrl: el("chat-base"), model: el("chat-model"), apiKey: el("chat-key") };
+const chatStatus = el("chat-status");
+
+const saved = chat.loadSettings();
+chatFields.baseUrl.value = saved.baseUrl ?? "";
+chatFields.model.value = saved.model ?? "";
+chatFields.apiKey.value = saved.apiKey ?? "";
+
+function chatSettings() {
+  return {
+    baseUrl: chatFields.baseUrl.value.trim(),
+    model: chatFields.model.value.trim(),
+    apiKey: chatFields.apiKey.value.trim(),
+  };
+}
+
+el("chat-save").addEventListener("click", () => {
+  chat.saveSettings(chatSettings());
+  chatStatus.textContent = "تنظیمات در این مرورگر ذخیره شد";
+});
+
+el("chat-forget").addEventListener("click", () => {
+  chat.forgetSettings();
+  for (const field of Object.values(chatFields)) field.value = "";
+  chatStatus.textContent = "کلید پاک شد";
+});
+
+el("chat-ask").addEventListener("click", async () => {
+  const settings = chatSettings();
+  const question = el("chat-question").value.trim();
+  if (!settings.baseUrl || !settings.model || !settings.apiKey) {
+    chatStatus.textContent = "آدرس سرویس، نام مدل و کلید API را کامل کنید";
+    return;
+  }
+  if (!question) return;
+
+  el("chat-ask").disabled = true;
+  el("chat-answer").value = "";
+  chatStatus.textContent = "در حال پرسیدن…";
+  try {
+    const rows = await db.listEntries();
+    // Shown so a "no information" answer can be told apart from empty context.
+    el("chat-context").value = chat.asContext(rows) || "(هیچ رکوردی فرستاده نشد)";
+    el("chat-answer").value = await chat.ask(settings, question, rows);
+    chatStatus.textContent = `بر پایه‌ی ${rows.length} رکورد`;
+  } catch (error) {
+    chatStatus.textContent = `خطا: ${error.message}`;
+  } finally {
+    el("chat-ask").disabled = false;
   }
 });
 
