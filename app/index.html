@@ -1,36 +1,62 @@
 <!doctype html>
-<!--
-  lang and dir start in Persian, the default interface language.
-  The language toggle in step 23 switches both of these at runtime:
-  Persian is lang="fa" dir="rtl", English is lang="en" dir="ltr".
--->
 <html lang="fa" dir="rtl">
   <head>
-    <!-- Must come before any text. Without it, browsers may guess the
-         encoding and render Persian as unreadable characters. -->
+    <!-- Must come before any text, or Persian may render as unreadable characters. -->
     <meta charset="UTF-8" />
-
-    <!-- Makes the page use the real device width on phones instead of
-         pretending to be a 980px desktop screen and zooming out. -->
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-
     <title>صدانویس</title>
+    <style>
+      body {
+        font-family: Tahoma, sans-serif;
+        max-width: 40rem;
+        margin: 0 auto;
+        padding: 1rem;
+        line-height: 1.7;
+      }
+      /* Large tap targets, per CLAUDE.md. */
+      button, select, input[type="file"] {
+        font: inherit;
+        padding: 0.7rem;
+        margin-block: 0.3rem;
+        width: 100%;
+      }
+      textarea {
+        font: inherit;
+        width: 100%;
+        min-height: 12rem;
+        /* The transcript is always Persian, so it is always right to left. */
+        direction: rtl;
+      }
+      progress { width: 100%; }
+      .hint { font-size: 0.85rem; color: #555; }
+    </style>
   </head>
 
   <body>
     <h1>صدانویس</h1>
-    <p>تبدیل گفتار فارسی به متن، داخل مرورگر شما.</p>
+    <p>تبدیل گفتار فارسی به متن، داخل مرورگر شما. صدا و متن از دستگاه شما بیرون نمی‌رود.</p>
 
-    <!-- main.js writes into this element. If the text below ever stays
-         on screen, JavaScript failed to load and the page is broken. -->
+    <label for="model">مدل</label>
+    <select id="model"></select>
+    <p class="hint">
+      مدل فقط یک بار دانلود می‌شود و بعد از آن در مرورگر ذخیره می‌ماند.
+    </p>
+
+    <button id="record">ضبط صدا</button>
+
+    <label for="file">یا یک فایل صوتی انتخاب کنید</label>
+    <input id="file" type="file" accept="audio/*" />
+
+    <p class="hint">
+      برای نتیجه‌ی بهتر: نزدیک میکروفون صحبت کنید، در محیط ساکت، و تا جای ممکن از
+      میکروفون خود گوشی استفاده کنید نه هندزفری بلوتوث.
+    </p>
+
     <p id="status">در حال بارگذاری…</p>
+    <progress id="progress" max="100" value="0" hidden></progress>
 
-    <!--
-      Vite's entry point. type="module" enables import/export syntax.
-      The path is written from the project root, and Vite rewrites it at
-      build time to the hashed bundle under the base path, for example
-      /Write_audio_to_text/assets/main-a1b2c3.js
-    -->
+    <textarea id="transcript" dir="rtl" placeholder="متن پیاده‌شده اینجا نمایش داده می‌شود"></textarea>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

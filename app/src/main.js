@@ -1,69 +1,124 @@
-// Vite entry point. index.html loads this file with <script type="module">,
-// and Vite follows the imports from here to discover the rest of the app.
-//
-// Module scripts are deferred automatically: the browser finishes parsing the
-// HTML before running this, so elements can be read straight away with no
-// DOMContentLoaded listener.
+// Interface wiring: record or upload audio, convert it, hand it to the worker,
+// show progress, show the transcript.
 
-const statusEl = document.getElementById("status");
+import { MODELS, DEFAULT_MODEL } from "./models.js";
 
-// Replaces the "loading" tripwire in index.html. If the Persian word below
-// appears, the whole chain worked: Vite built the module, the browser fetched
-// and ran it, and the DOM updated.
-statusEl.textContent = "آماده";
+const el = (id) => document.getElementById(id);
+const modelSelect = el("model");
+const recordButton = el("record");
+const fileInput = el("file");
+const statusText = el("status");
+const progressBar = el("progress");
+const transcript = el("transcript");
 
-// ---------------------------------------------------------------------------
-// TEMPORARY diagnostics, removed when the real interface is built in step 23.
-//
-// Step 8 opens this page on a real phone. Without this block that test only
-// proves the deploy worked. With it, the test also answers what steps 18 and
-// 20 depend on: does this device have WebGPU (fast) or only WebAssembly
-// (slow), and is the microphone reachable.
-//
-// These are feature checks, not browser checks. We ask whether the capability
-// exists rather than trying to identify the browser by name.
-// ---------------------------------------------------------------------------
+// ----------------------------------------------------------------- model list --
+for (const [key, model] of Object.entries(MODELS)) {
+  const option = document.createElement("option");
+  option.value = key;
+  option.textContent = `${model.label} – ${model.megabytes} مگابایت`;
+  modelSelect.append(option);
+}
+modelSelect.value = DEFAULT_MODEL;
 
-const capabilities = [
-  // getUserMedia and the model cache only work over HTTPS or on localhost.
-  ["Secure context", window.isSecureContext],
+// --------------------------------------------------------------------- worker --
+const worker = new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
 
-  // Microphone access. The optional chaining (?.) guards against
-  // navigator.mediaDevices being undefined on insecure origins.
-  ["Microphone API", Boolean(navigator.mediaDevices?.getUserMedia)],
+worker.onmessage = ({ data }) => {
+  if (data.type === "progress" && data.item.status === "progress" && data.item.total) {
+    const percent = Math.round((data.item.loaded / data.item.total) * 100);
+    progressBar.hidden = false;
+    progressBar.value = percent;
+    setStatus(`دریافت مدل: ${percent}٪`);
+  } else if (data.type === "status") {
+    progressBar.hidden = data.text === "transcribing";
+    setStatus(data.text === "transcribing" ? "در حال تبدیل گفتار به متن…" : "در حال آماده‌سازی مدل…");
+  } else if (data.type === "done") {
+    progressBar.hidden = true;
+    transcript.value = data.text;
+    setStatus("انجام شد");
+    setBusy(false);
+  } else if (data.type === "error") {
+    progressBar.hidden = true;
+    setStatus(`خطا: ${data.message}`);
+    setBusy(false);
+  }
+};
 
-  // Records the microphone stream. Output format differs per browser.
-  ["MediaRecorder", typeof MediaRecorder !== "undefined"],
-
-  // Runs transcription off the main thread so the page does not freeze.
-  ["Web Worker", typeof Worker !== "undefined"],
-
-  // How the ONNX model runs when there is no WebGPU. Always present today.
-  ["WebAssembly", typeof WebAssembly !== "undefined"],
-
-  // The fast path. Missing here means transcription falls back to WebAssembly,
-  // which is several times slower.
-  ["WebGPU", "gpu" in navigator],
-];
-
-const list = document.createElement("ul");
-
-// The page is dir="rtl" for Persian, but these labels are English, so this
-// one element is switched back to left to right. Mixing directions without
-// saying so is what produces sentences with the punctuation on the wrong side.
-list.dir = "ltr";
-list.style.textAlign = "left";
-
-for (const [label, supported] of capabilities) {
-  const item = document.createElement("li");
-  item.textContent = `${supported ? "yes" : "NO"} : ${label}`;
-  list.append(item);
+function setStatus(text) {
+  statusText.textContent = text;
 }
 
-const device = document.createElement("p");
-device.dir = "ltr";
-device.style.textAlign = "left";
-device.style.fontSize = "0.8em";
-device.textContent = navigator.userAgent;
+function setBusy(busy) {
+  recordButton.disabled = busy;
+  fileInput.disabled = busy;
+  modelSelect.disabled = busy;
+}
 
-document.body.append(list, device);
+// -------------------------------------------------------------- audio to 16k --
+// Whisper needs 16 kHz, mono, floating point samples. Phones and browsers record
+// at 44.1 or 48 kHz, in stereo, in different compressed formats (webm/opus in
+// Chrome, mp4/aac in Safari). The browser decodes any of them for us, and an
+// OfflineAudioContext resamples and mixes down to one channel.
+async function toMono16k(arrayBuffer) {
+  // On iPhone Safari an AudioContext may only be created inside a user gesture,
+  // which is why this runs after a tap or a file choice, never on page load.
+  const context = new AudioContext();
+  const decoded = await context.decodeAudioData(arrayBuffer);
+  await context.close();
+
+  const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * 16000), 16000);
+  const source = offline.createBufferSource();
+  source.buffer = decoded;
+  source.connect(offline.destination);
+  source.start();
+  const rendered = await offline.startRendering();
+  return rendered.getChannelData(0);
+}
+
+async function transcribe(arrayBuffer) {
+  setBusy(true);
+  transcript.value = "";
+  setStatus("در حال آماده‌سازی صدا…");
+  try {
+    const audio = await toMono16k(arrayBuffer);
+    worker.postMessage({ model: modelSelect.value, audio }, [audio.buffer]);
+  } catch (error) {
+    setStatus(`این فایل صوتی خوانده نشد: ${error.message}`);
+    setBusy(false);
+  }
+}
+
+// ------------------------------------------------------------------ recording --
+let recorder = null;
+
+recordButton.addEventListener("click", async () => {
+  if (recorder) {
+    recorder.stop();
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const chunks = [];
+    recorder = new MediaRecorder(stream);
+    recorder.ondataavailable = (event) => chunks.push(event.data);
+    recorder.onstop = async () => {
+      stream.getTracks().forEach((track) => track.stop());
+      recorder = null;
+      recordButton.textContent = "ضبط صدا";
+      await transcribe(await new Blob(chunks).arrayBuffer());
+    };
+    recorder.start();
+    recordButton.textContent = "توقف ضبط";
+    setStatus("در حال ضبط…");
+  } catch (error) {
+    setStatus(`دسترسی به میکروفون ممکن نشد: ${error.message}`);
+  }
+});
+
+// --------------------------------------------------------------------- upload --
+fileInput.addEventListener("change", async () => {
+  const file = fileInput.files?.[0];
+  if (file) await transcribe(await file.arrayBuffer());
+});
+
+setStatus("آماده");
