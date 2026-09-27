@@ -9,12 +9,15 @@ for what you record.
 
 Record your voice or upload an audio file, and get Persian text back. Save each
 transcript as a record with a person's name, edit or delete records, and export
-them as CSV, JSON, or a full database backup file.
+them as CSV, JSON, or a full database backup file. You can also ask questions
+about your records in plain Persian, using your own API key.
 
 Speech recognition runs on your own device with
 [transformers.js](https://github.com/huggingface/transformers.js), and the records
 live in [PGlite](https://pglite.dev), which is PostgreSQL compiled to WebAssembly.
-There is no server and no account. Nothing you say or write is uploaded anywhere.
+There is no server and no account. Your audio never leaves the device. The only
+exception is the question feature below: if you use it, the text of your records
+is sent to the service you chose, with your own key.
 
 The only download is the speech recognition model, fetched once from Hugging Face
 and then cached in the browser. The default model is 563 MB.
@@ -22,8 +25,8 @@ and then cached in the browser. The default model is 563 MB.
 ## Status
 
 Working: recording, file upload, transcription, model choice, download progress
-with a cancel button, exports for text, JSON and audio, and the records database
-with backup and restore.
+with a cancel button, exports for text, JSON and audio, the records database with
+backup and restore, and asking questions about the records.
 
 Not built yet: Word (`.docx`) export, the Persian and English interface toggle,
 offline installation as an app, and search over records.
@@ -37,6 +40,18 @@ Two things to know before relying on it:
 2. **Recording quality matters more than the model.** A distant or Bluetooth
    recording loses the frequencies Persian consonants depend on, and no model can
    recover them. Record close to the microphone, in a quiet room.
+
+## Asking questions about your records
+
+This part needs an API key of your own, from any service with an OpenAI compatible
+endpoint. Fill in the service address, the model name and your key, and ask
+something like "how much does Morgan owe?".
+
+- The key is stored in your browser on that device, and is sent only to the
+  service you chose. There is a button to delete it.
+- Only the text of your records is sent, never the audio, and at most 500 records
+  per question. You can see exactly what was sent under the answer.
+- The cost is on your own account.
 
 ## Running it yourself
 
