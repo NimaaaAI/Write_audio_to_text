@@ -32,6 +32,9 @@ export const MODELS = {
     megabytes: 759,
   },
   "large-q4f16": {
+    // Measured: fails on iPhone after roughly 800 MB. The library allocates the
+    // whole file in memory while downloading, and inference needs it again.
+    desktopOnly: true,
     label: "بزرگ، کندتر",
     id: "onnx-community/whisper-large-v3-ONNX",
     revision: "3b6257ad5e67aa523c7c07f4fea04d445eecc4a6",
@@ -39,6 +42,7 @@ export const MODELS = {
     megabytes: 980,
   },
   "turbo-q8": {
+    desktopOnly: true, // same reason as large-q4f16
     label: "توربو، فشرده‌سازی کمتر",
     id: "onnx-community/whisper-large-v3-turbo",
     revision: "360ebcde2559d60bb474678be3c1de9ef347d01a",

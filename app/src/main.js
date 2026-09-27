@@ -19,13 +19,33 @@ const dbStatus = el("db-status");
 let last = { text: "", seconds: 0, model: "", audioBlob: null, audioType: "" };
 
 // ----------------------------------------------------------------- model list --
+// Phones cannot run the largest models. The download library holds the whole file
+// in memory, and inference needs it again, so a 1 GB model kills a mobile tab
+// somewhere past 800 MB. Measured on iPhone Safari. Those options are disabled
+// on touch devices rather than left to fail after a long download.
+const isPhone = navigator.maxTouchPoints > 0 && Math.min(screen.width, screen.height) < 500;
+
 for (const [key, model] of Object.entries(MODELS)) {
   const option = document.createElement("option");
   option.value = key;
   option.textContent = `${model.label} – ${model.megabytes} مگابایت`;
+  if (model.desktopOnly && isPhone) {
+    option.disabled = true;
+    option.textContent += " (فقط رایانه)";
+  }
   modelSelect.append(option);
 }
 modelSelect.value = DEFAULT_MODEL;
+
+// Ask the browser how much room is left, and refuse a download that cannot fit.
+// Better a message now than a failure after twenty minutes on mobile data.
+async function enoughSpaceFor(model) {
+  const estimate = await navigator.storage?.estimate?.();
+  if (!estimate?.quota) return true; // browser will not say, so let it try
+  const free = estimate.quota - (estimate.usage ?? 0);
+  // 1.3 because the file is held in memory and written to the cache as well.
+  return free > model.megabytes * 1e6 * 1.3;
+}
 
 // --------------------------------------------------------------------- worker --
 // Kept in a variable because cancelling a download means terminating the worker:
@@ -125,6 +145,15 @@ async function toMono16k(arrayBuffer) {
 }
 
 async function transcribe(blob) {
+  const model = MODELS[modelSelect.value];
+  if (!(await enoughSpaceFor(model))) {
+    setStatus(
+      `فضای کافی در مرورگر نیست. این مدل ${model.megabytes} مگابایت است. ` +
+      `مدل کوچک‌تری را انتخاب کنید یا فضای مرورگر را خالی کنید.`,
+    );
+    return;
+  }
+
   setBusy(true);
   setExportsEnabled(false);
   transcript.value = "";
