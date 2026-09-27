@@ -1,69 +1,86 @@
 # Voice Writer (صدانویس)
 
-Persian speech to text that runs entirely in your browser.
+Persian speech to text that runs entirely in your browser, with a local database
+for what you record.
 
-**Status: under construction.** The web app cannot transcribe yet. Model selection is
-finished, and the audio and transcription work is next. See the plan and progress
-checklist in [CLAUDE.md](CLAUDE.md).
+**Live:** [nimaaaai.github.io/Write_audio_to_text](https://nimaaaai.github.io/Write_audio_to_text/)
 
-## What it will do
+## What it does
 
-Record your voice or upload an audio file, get Persian text back, and download it as
-`.txt` or `.docx`. A "copy for summary" button copies the transcript together with a
-ready made Persian prompt, so you can paste it into any chatbot and get a summary.
+Record your voice or upload an audio file, and get Persian text back. Save each
+transcript as a record with a person's name, edit or delete records, and export
+them as CSV, JSON, or a full database backup file.
 
-## How it works
+Speech recognition runs on your own device with
+[transformers.js](https://github.com/huggingface/transformers.js), and the records
+live in [PGlite](https://pglite.dev), which is PostgreSQL compiled to WebAssembly.
+There is no server and no account. Nothing you say or write is uploaded anywhere.
 
-Speech recognition runs on your own device using
-[transformers.js](https://github.com/huggingface/transformers.js). There is no backend
-server. Your audio and your text never leave your browser, and nothing is uploaded
-anywhere.
+The only download is the speech recognition model, fetched once from Hugging Face
+and then cached in the browser. The default model is 563 MB.
 
-The only download is the speech recognition model itself, fetched once from Hugging
-Face and then cached. After that the app works offline.
+## Status
 
-## Done so far
+Working: recording, file upload, transcription, model choice, download progress
+with a cancel button, exports for text, JSON and audio, and the records database
+with backup and restore.
 
-**Setup.** Vite project, deployment to GitHub Pages by GitHub Actions, and a
-placeholder page live at
-[nimaaaai.github.io/Write_audio_to_text](https://nimaaaai.github.io/Write_audio_to_text/)
-that reports which features a visitor's browser supports. WebGPU is present on recent
-devices (Safari 26 on macOS and on an iPhone 15 Pro) and absent on older ones (an
-iPhone 8, which can never have it).
+Not built yet: Word (`.docx`) export, the Persian and English interface toggle,
+offline installation as an app, and search over records.
 
-**Model lab.** Python and Node scripts that read model sizes from the Hugging Face API,
-transcribe test clips with full precision models, and transcribe the same clips with the
-quantized ONNX files the browser will actually load.
+Two things to know before relying on it:
 
-**Model chosen.** `whisper-large-v3-turbo`, quantized to q4f16, a 563 MB download. Four
-larger models are offered as alternatives. All are loaded straight from the
-`onnx-community` repositories at pinned revisions.
+1. **Keep backups.** Records are stored in your browser on one device. Clearing
+   browser data deletes them, and on iPhone Safari deletes them after 7 days
+   without a visit unless the app is added to the Home Screen. Use the "download
+   the database file" button.
+2. **Recording quality matters more than the model.** A distant or Bluetooth
+   recording loses the frequencies Persian consonants depend on, and no model can
+   recover them. Record close to the microphone, in a quiet room.
 
-Two findings from that work, both recorded in CLAUDE.md section 6:
+## Running it yourself
 
-1. **Small models do not work for Persian.** Multilingual `base` and `small`, and
-   Persian fine tuned `small`, all produced unreadable text or lost whole passages to
-   repetition. So there is no lightweight option for older phones.
-2. **Recording quality matters more than model choice.** The same model produced clean
-   Persian from a studio podcast and nonsense from a muffled phone recording. The
-   consonants that Persian relies on live between 2 and 8 kHz, and a distant or
-   Bluetooth recording loses that band.
+You need [Node.js](https://nodejs.org) 22 or newer. Then, on any operating system:
 
-## Left to do
+```bash
+git clone https://github.com/NimaaaAI/Write_audio_to_text.git
+cd Write_audio_to_text/app
+npm ci
+npm run dev
+```
 
-- Microphone recording and audio file upload in the browser
-- Transcription in a Web Worker, with model download progress
-- Long audio handling and progress reporting
-- Testing on Android Chrome and iPhone Safari, including memory limits
-- `.txt` and `.docx` download
-- Persian and English interface, right to left layout, Vazirmatn font, model picker
-- Installable as a progressive web app, working offline
-- Copy for summary
+Open the address it prints, which ends in `/Write_audio_to_text/`.
+
+Installing Node, if you do not have it:
+
+| System | Command |
+|---|---|
+| **macOS** | `brew install node` |
+| **Ubuntu** | `curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh \| bash`, then `nvm install 26` |
+| **Windows** | `winget install OpenJS.NodeJS.LTS`, or the installer from nodejs.org |
+
+Other commands:
+
+```bash
+npm run build     # produce the static site in app/dist
+npm run preview   # serve that built site locally
+```
+
+Pushing to `main` builds and publishes the site automatically through GitHub
+Actions.
+
+## The model lab
+
+`lab/` holds the scripts used to choose the model: file sizes from the Hugging
+Face API, transcription with full precision PyTorch models, and transcription with
+the quantized ONNX files the browser actually loads. It is not needed to run the
+app. See [lab/README.md](lab/README.md), and
+[CLAUDE.md](CLAUDE.md) section 6 for the measurements and the decision.
 
 ## License
 
 Code: MIT, see [LICENSE](LICENSE).
 
-The speech recognition models are third party. Whisper was made by OpenAI, and the ONNX
-exports used here are published by the `onnx-community` organisation on Hugging Face.
-Their licences will be credited exactly once verified, before the first release.
+Speech recognition uses OpenAI's Whisper models, in the ONNX exports published by
+the `onnx-community` organisation on Hugging Face, loaded at pinned revisions.
+Their licences will be credited exactly before the first tagged release.
