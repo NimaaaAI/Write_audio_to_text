@@ -12,6 +12,8 @@ __pycache__/
 # Node and Vite (rebuild with npm install / npm run build)
 node_modules/
 dist/
+# ONNX Runtime wasm files, copied out of node_modules by vite.config.js
+app/public/ort/
 .vite/
 *.local
 
