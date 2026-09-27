@@ -1,6 +1,7 @@
 // Interface wiring: record or upload audio, convert it, hand it to the worker,
-// show progress, show the transcript.
+// show progress, save the result in the database, export things.
 
+import * as db from "./db.js";
 import { MODELS, DEFAULT_MODEL } from "./models.js";
 
 const el = (id) => document.getElementById(id);
@@ -9,7 +10,13 @@ const recordButton = el("record");
 const fileInput = el("file");
 const statusText = el("status");
 const progressBar = el("progress");
+const cancelButton = el("cancel");
 const transcript = el("transcript");
+const recordsBody = el("records").querySelector("tbody");
+const dbStatus = el("db-status");
+
+// What the last transcription produced, so the export buttons have something.
+let last = { text: "", seconds: 0, model: "", audioBlob: null, audioType: "" };
 
 // ----------------------------------------------------------------- model list --
 for (const [key, model] of Object.entries(MODELS)) {
@@ -21,28 +28,65 @@ for (const [key, model] of Object.entries(MODELS)) {
 modelSelect.value = DEFAULT_MODEL;
 
 // --------------------------------------------------------------------- worker --
-const worker = new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
+// Kept in a variable because cancelling a download means terminating the worker:
+// the library has no way to abort a fetch, so killing the thread is the only stop.
+let worker = null;
+// Bytes per file, so progress can be shown in MB across both model files.
+let downloaded = new Map();
 
-worker.onmessage = ({ data }) => {
-  if (data.type === "progress" && data.item.status === "progress" && data.item.total) {
-    const percent = Math.round((data.item.loaded / data.item.total) * 100);
-    progressBar.hidden = false;
-    progressBar.value = percent;
-    setStatus(`دریافت مدل: ${percent}٪`);
+function startWorker() {
+  worker = new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
+  worker.onmessage = onWorkerMessage;
+}
+
+function onWorkerMessage({ data }) {
+  if (data.type === "progress") {
+    const item = data.item;
+    if (item.status === "progress" && item.total) {
+      downloaded.set(item.file, { loaded: item.loaded, total: item.total });
+      let loaded = 0, total = 0;
+      for (const f of downloaded.values()) {
+        loaded += f.loaded;
+        total += f.total;
+      }
+      const mb = (bytes) => (bytes / 1e6).toFixed(0);
+      progressBar.hidden = false;
+      cancelButton.hidden = false;
+      progressBar.value = Math.round((loaded / total) * 100);
+      // "312 of 563 MB downloaded, 251 MB left"
+      setStatus(`دانلود مدل: ${mb(loaded)} از ${mb(total)} مگابایت، ${mb(total - loaded)} مگابایت مانده`);
+    }
   } else if (data.type === "status") {
-    progressBar.hidden = data.text === "transcribing";
-    setStatus(data.text === "transcribing" ? "در حال تبدیل گفتار به متن…" : "در حال آماده‌سازی مدل…");
+    const transcribing = data.text === "transcribing";
+    progressBar.hidden = transcribing;
+    cancelButton.hidden = transcribing;
+    setStatus(transcribing ? "در حال تبدیل گفتار به متن…" : "در حال آماده‌سازی مدل…");
   } else if (data.type === "done") {
-    progressBar.hidden = true;
-    transcript.value = data.text;
-    setStatus("انجام شد");
-    setBusy(false);
+    finishTranscription(data.text);
   } else if (data.type === "error") {
-    progressBar.hidden = true;
+    hideProgress();
     setStatus(`خطا: ${data.message}`);
     setBusy(false);
   }
-};
+}
+
+startWorker();
+
+cancelButton.addEventListener("click", () => {
+  // Terminating the worker aborts the downloads with it. Files that had not
+  // finished are not kept, so this cancels rather than pauses.
+  worker.terminate();
+  downloaded = new Map();
+  startWorker();
+  hideProgress();
+  setStatus("دانلود لغو شد");
+  setBusy(false);
+});
+
+function hideProgress() {
+  progressBar.hidden = true;
+  cancelButton.hidden = true;
+}
 
 function setStatus(text) {
   statusText.textContent = text;
@@ -54,14 +98,19 @@ function setBusy(busy) {
   modelSelect.disabled = busy;
 }
 
+function setExportsEnabled(enabled) {
+  for (const id of ["save-db", "download-text", "download-json"]) el(id).disabled = !enabled;
+  el("download-audio").disabled = !last.audioBlob;
+}
+
 // -------------------------------------------------------------- audio to 16k --
-// Whisper needs 16 kHz, mono, floating point samples. Phones and browsers record
-// at 44.1 or 48 kHz, in stereo, in different compressed formats (webm/opus in
-// Chrome, mp4/aac in Safari). The browser decodes any of them for us, and an
-// OfflineAudioContext resamples and mixes down to one channel.
+// Whisper needs 16 kHz, mono, floating point samples. Phones record at 44.1 or
+// 48 kHz, in stereo, in different formats (webm/opus in Chrome, mp4/aac in
+// Safari). The browser decodes any of them, and an OfflineAudioContext resamples
+// and mixes down to one channel.
 async function toMono16k(arrayBuffer) {
   // On iPhone Safari an AudioContext may only be created inside a user gesture,
-  // which is why this runs after a tap or a file choice, never on page load.
+  // so this runs after a tap or a file choice, never on page load.
   const context = new AudioContext();
   const decoded = await context.decodeAudioData(arrayBuffer);
   await context.close();
@@ -75,17 +124,35 @@ async function toMono16k(arrayBuffer) {
   return rendered.getChannelData(0);
 }
 
-async function transcribe(arrayBuffer) {
+async function transcribe(blob) {
   setBusy(true);
+  setExportsEnabled(false);
   transcript.value = "";
   setStatus("در حال آماده‌سازی صدا…");
   try {
-    const audio = await toMono16k(arrayBuffer);
+    const audio = await toMono16k(await blob.arrayBuffer());
+    last = {
+      text: "",
+      seconds: audio.length / 16000,
+      model: modelSelect.value,
+      audioBlob: blob,
+      audioType: blob.type,
+    };
+    el("download-audio").disabled = false;
     worker.postMessage({ model: modelSelect.value, audio }, [audio.buffer]);
   } catch (error) {
     setStatus(`این فایل صوتی خوانده نشد: ${error.message}`);
     setBusy(false);
   }
+}
+
+function finishTranscription(text) {
+  hideProgress();
+  transcript.value = text;
+  last.text = text;
+  setStatus("انجام شد");
+  setBusy(false);
+  setExportsEnabled(Boolean(text));
 }
 
 // ------------------------------------------------------------------ recording --
@@ -103,9 +170,10 @@ recordButton.addEventListener("click", async () => {
     recorder.ondataavailable = (event) => chunks.push(event.data);
     recorder.onstop = async () => {
       stream.getTracks().forEach((track) => track.stop());
+      const type = recorder.mimeType;
       recorder = null;
       recordButton.textContent = "ضبط صدا";
-      await transcribe(await new Blob(chunks).arrayBuffer());
+      await transcribe(new Blob(chunks, { type }));
     };
     recorder.start();
     recordButton.textContent = "توقف ضبط";
@@ -115,10 +183,130 @@ recordButton.addEventListener("click", async () => {
   }
 });
 
-// --------------------------------------------------------------------- upload --
 fileInput.addEventListener("change", async () => {
   const file = fileInput.files?.[0];
-  if (file) await transcribe(await file.arrayBuffer());
+  if (file) await transcribe(file);
 });
 
+// ------------------------------------------------------------------ downloads --
+function download(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+// transcript_20260927_1830
+function stamp() {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
+}
+
+el("download-text").addEventListener("click", () => {
+  // The BOM (﻿) makes older Windows editors read the file as UTF-8, so
+  // Persian is not shown as mojibake.
+  download(new Blob(["﻿" + last.text], { type: "text/plain;charset=utf-8" }), `transcript_${stamp()}.txt`);
+});
+
+el("download-json").addEventListener("click", () => {
+  const payload = {
+    text: last.text,
+    seconds: Math.round(last.seconds),
+    model: MODELS[last.model]?.id,
+    dtype: MODELS[last.model]?.dtype,
+    created_at: new Date().toISOString(),
+  };
+  download(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }), `transcript_${stamp()}.json`);
+});
+
+el("download-audio").addEventListener("click", () => {
+  // Chrome records webm, Safari records mp4. Keep whatever the browser produced.
+  const extension = (last.audioType.includes("mp4") ? "mp4" : last.audioType.includes("webm") ? "webm" : "bin");
+  download(last.audioBlob, `recording_${stamp()}.${extension}`);
+});
+
+// ------------------------------------------------------------------- database --
+el("save-db").addEventListener("click", async () => {
+  await db.addEntry({ text: last.text, seconds: Math.round(last.seconds), model: MODELS[last.model]?.id });
+  await refreshRecords();
+  setStatus("در پایگاه داده ذخیره شد");
+});
+
+async function refreshRecords() {
+  const rows = await db.listEntries();
+  dbStatus.textContent = `${rows.length} رکورد ذخیره شده`;
+  recordsBody.replaceChildren();
+
+  for (const row of rows) {
+    const tr = document.createElement("tr");
+
+    const date = document.createElement("td");
+    date.textContent = new Date(row.created_at).toLocaleDateString("fa-IR");
+
+    const person = document.createElement("td");
+    const personInput = document.createElement("input");
+    personInput.type = "text";
+    personInput.value = row.person ?? "";
+    personInput.placeholder = "نام شخص";
+    // Saved when the field loses focus, so typing is not interrupted.
+    personInput.addEventListener("change", () => db.setPerson(row.id, personInput.value.trim()));
+    person.append(personInput);
+
+    const text = document.createElement("td");
+    text.textContent = row.text;
+
+    const actions = document.createElement("td");
+    const remove = document.createElement("button");
+    remove.textContent = "حذف";
+    remove.className = "danger";
+    remove.addEventListener("click", async () => {
+      await db.deleteEntry(row.id);
+      await refreshRecords();
+    });
+    actions.append(remove);
+
+    tr.append(date, person, text, actions);
+    recordsBody.append(tr);
+  }
+}
+
+el("export-csv").addEventListener("click", async () => {
+  download(new Blob(["﻿" + (await db.toCsv())], { type: "text/csv;charset=utf-8" }), `records_${stamp()}.csv`);
+});
+
+el("export-json").addEventListener("click", async () => {
+  download(new Blob([await db.toJson()], { type: "application/json" }), `records_${stamp()}.json`);
+});
+
+el("backup").addEventListener("click", async () => {
+  dbStatus.textContent = "در حال ساختن فایل پشتیبان…";
+  download(await db.dumpFile(), `voice-writer_${stamp()}.tar.gz`);
+  await refreshRecords();
+});
+
+el("restore").addEventListener("click", (event) => {
+  // Restoring throws away what is there now, so ask first.
+  if (!confirm("همه‌ی رکوردهای فعلی جایگزین می‌شوند. مطمئن هستید؟")) event.preventDefault();
+});
+
+el("restore").addEventListener("change", async () => {
+  const file = el("restore").files?.[0];
+  if (!file) return;
+  dbStatus.textContent = "در حال بازگرداندن…";
+  try {
+    await db.restoreFile(file);
+    await refreshRecords();
+  } catch (error) {
+    dbStatus.textContent = `بازگرداندن انجام نشد: ${error.message}`;
+  }
+});
+
+// Ask the browser to keep our data. Chrome usually agrees. Safari on iPhone is
+// unreliable, which is why the app tells users to add it to the Home Screen.
+navigator.storage?.persist?.().catch(() => {});
+
+await refreshRecords();
 setStatus("آماده");

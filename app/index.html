@@ -8,27 +8,34 @@
     <style>
       body {
         font-family: Tahoma, sans-serif;
-        max-width: 40rem;
+        max-width: 44rem;
         margin: 0 auto;
         padding: 1rem;
         line-height: 1.7;
       }
       /* Large tap targets, per CLAUDE.md. */
-      button, select, input[type="file"] {
+      button, select, input[type="file"], input[type="text"] {
         font: inherit;
         padding: 0.7rem;
         margin-block: 0.3rem;
-        width: 100%;
       }
+      button, select, input[type="file"] { width: 100%; }
       textarea {
         font: inherit;
         width: 100%;
-        min-height: 12rem;
-        /* The transcript is always Persian, so it is always right to left. */
-        direction: rtl;
+        min-height: 9rem;
+        direction: rtl; /* the transcript is always Persian */
       }
       progress { width: 100%; }
       .hint { font-size: 0.85rem; color: #555; }
+      .row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+      .row > * { flex: 1 1 10rem; }
+      fieldset { border: 1px solid #ccc; border-radius: 0.4rem; margin-block: 1rem; }
+      table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+      th, td { border-bottom: 1px solid #ddd; padding: 0.4rem; text-align: right; vertical-align: top; }
+      td input[type="text"] { width: 100%; padding: 0.3rem; margin: 0; }
+      .danger { color: #a00; }
+      [hidden] { display: none !important; }
     </style>
   </head>
 
@@ -36,26 +43,63 @@
     <h1>صدانویس</h1>
     <p>تبدیل گفتار فارسی به متن، داخل مرورگر شما. صدا و متن از دستگاه شما بیرون نمی‌رود.</p>
 
-    <label for="model">مدل</label>
-    <select id="model"></select>
-    <p class="hint">
-      مدل فقط یک بار دانلود می‌شود و بعد از آن در مرورگر ذخیره می‌ماند.
-    </p>
+    <!-- ------------------------------------------------------------ recording -->
+    <fieldset>
+      <legend>ضبط و تبدیل</legend>
 
-    <button id="record">ضبط صدا</button>
+      <label for="model">مدل</label>
+      <select id="model"></select>
 
-    <label for="file">یا یک فایل صوتی انتخاب کنید</label>
-    <input id="file" type="file" accept="audio/*" />
+      <button id="record">ضبط صدا</button>
 
-    <p class="hint">
-      برای نتیجه‌ی بهتر: نزدیک میکروفون صحبت کنید، در محیط ساکت، و تا جای ممکن از
-      میکروفون خود گوشی استفاده کنید نه هندزفری بلوتوث.
-    </p>
+      <label for="file">یا یک فایل صوتی انتخاب کنید</label>
+      <input id="file" type="file" accept="audio/*" />
 
-    <p id="status">در حال بارگذاری…</p>
-    <progress id="progress" max="100" value="0" hidden></progress>
+      <p class="hint">
+        برای نتیجه‌ی بهتر: نزدیک میکروفون صحبت کنید، در محیط ساکت، و تا جای ممکن از
+        میکروفون خود گوشی استفاده کنید نه هندزفری بلوتوث.
+      </p>
 
-    <textarea id="transcript" dir="rtl" placeholder="متن پیاده‌شده اینجا نمایش داده می‌شود"></textarea>
+      <p id="status">آماده</p>
+      <progress id="progress" max="100" value="0" hidden></progress>
+      <button id="cancel" class="danger" hidden>لغو دانلود مدل</button>
+
+      <textarea id="transcript" dir="rtl" placeholder="متن پیاده‌شده اینجا نمایش داده می‌شود"></textarea>
+
+      <div class="row">
+        <button id="save-db" disabled>ذخیره در پایگاه داده</button>
+        <button id="download-text" disabled>دانلود متن (txt)</button>
+        <button id="download-json" disabled>دانلود متن (json)</button>
+        <button id="download-audio" disabled>دانلود صدا</button>
+      </div>
+    </fieldset>
+
+    <!-- -------------------------------------------------------------- records -->
+    <fieldset>
+      <legend>پایگاه داده</legend>
+
+      <p class="hint">
+        داده‌ها در همین مرورگر و روی همین دستگاه ذخیره می‌شوند. برای اینکه از دست
+        نروند، فایل پشتیبان را دانلود کنید و اپ را به صفحه‌ی خانه اضافه کنید.
+      </p>
+
+      <div class="row">
+        <button id="export-csv">خروجی CSV</button>
+        <button id="export-json">خروجی JSON</button>
+        <button id="backup">دانلود فایل پایگاه داده</button>
+      </div>
+
+      <label for="restore">بازگرداندن از فایل پشتیبان (همه‌ی داده‌های فعلی را جایگزین می‌کند)</label>
+      <input id="restore" type="file" accept=".tar.gz,.tgz,application/gzip" />
+
+      <p id="db-status" class="hint"></p>
+      <table id="records">
+        <thead>
+          <tr><th>تاریخ</th><th>شخص</th><th>متن</th><th></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </fieldset>
 
     <script type="module" src="/src/main.js"></script>
   </body>
