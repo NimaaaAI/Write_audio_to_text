@@ -36,20 +36,43 @@ async function getTranscriber(key) {
   if (loaded?.key === key) return loaded.transcriber;
 
   const model = MODELS[key];
-  // WebGPU is several times faster, but it is missing on older devices
-  // (an iPhone 8 can never have it). WebAssembly is the fallback that always works.
-  const device = navigator.gpu ? "webgpu" : "wasm";
-  postMessage({ type: "status", text: `loading model on ${device}` });
-
-  const transcriber = await pipeline("automatic-speech-recognition", model.id, {
+  const options = {
     revision: model.revision,
     dtype: { encoder_model: model.dtype, decoder_model_merged: model.dtype },
-    device,
     progress_callback: (item) => postMessage({ type: "progress", item }),
-  });
+  };
+
+  let transcriber = null;
+  if (await webgpuWorks()) {
+    try {
+      postMessage({ type: "status", text: "loading model on webgpu" });
+      transcriber = await pipeline("automatic-speech-recognition", model.id, { ...options, device: "webgpu" });
+    } catch (error) {
+      // Asking for an adapter can succeed and the backend still fail to start.
+      // Falling back costs a reload of an already downloaded model, not a redownload.
+      postMessage({ type: "status", text: `webgpu failed (${error.message}), using wasm` });
+    }
+  }
+
+  if (!transcriber) {
+    postMessage({ type: "status", text: "loading model on wasm" });
+    transcriber = await pipeline("automatic-speech-recognition", model.id, { ...options, device: "wasm" });
+  }
 
   loaded = { key, transcriber };
   return transcriber;
+}
+
+// WebGPU is several times faster, but it is missing on older devices (an iPhone 8
+// can never have it) and unreliable on Linux, where Chrome exposes navigator.gpu
+// but refuses to give out an adapter unless started with --enable-unsafe-webgpu.
+// So ask for a real adapter rather than trusting that the object exists.
+async function webgpuWorks() {
+  try {
+    return Boolean(await navigator.gpu?.requestAdapter?.());
+  } catch {
+    return false;
+  }
 }
 
 self.onmessage = async ({ data }) => {
